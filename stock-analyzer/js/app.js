@@ -96,7 +96,7 @@ async function runAnalysis(symbol) {
     const rs = A.relativeStrength(bars, benchBars);
     const fu = fundamentals.value, nw = news.value, ow = ownership.value;
 
-    const score = A.buildScore({ technical: tech, trend: tr, relStrength: rs, risk: rk, fundamentals: fu, ownership: ow, news: nw });
+    const score = A.buildScore({ technical: tech, trend: tr, relStrength: rs, risk: rk, fundamentals: fu, ownership: ow, news: nw, sector: meta.sector });
     const rf = A.redFlags({ technical: tech, trend: tr, risk: rk, perf });
     const decision = A.decide(score, rk, rf.flags);
 
@@ -108,33 +108,9 @@ async function runAnalysis(symbol) {
 }
 
 async function fetchBenchmark() {
-  // NIFTY 50 via Yahoo index ticker (^NSEI, URL-encoded as %5ENSEI).
-  try { return await rawYahoo('%5ENSEI', 'NIFTY 50'); } catch (_) { return null; }
-}
-
-// minimal direct yahoo fetch for index tickers (uses provider's relay list indirectly)
-async function rawYahoo(ykey, name) {
-  const relays = [
-    (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-    (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
-  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${ykey}?range=5y&interval=1d`;
-  for (const r of relays) {
-    try {
-      const res = await fetch(r(target));
-      if (!res.ok) continue;
-      const j = await res.json();
-      const result = j?.chart?.result?.[0];
-      if (!result) continue;
-      const ts = result.timestamp || [];
-      const q = result.indicators?.quote?.[0] || {};
-      const adj = result.indicators?.adjclose?.[0]?.adjclose;
-      const bars = [];
-      for (let i = 0; i < ts.length; i++) { const c = q.close?.[i]; if (c == null) continue; bars.push({ t: ts[i] * 1000, c, adj: adj?.[i] ?? c, h: q.high?.[i], l: q.low?.[i], v: q.volume?.[i] }); }
-      if (bars.length) return { name, bars, source: 'Yahoo Finance', via: new URL(r(target)).host };
-    } catch (_) {}
-  }
-  return null;
+  // NIFTY 50 via Yahoo index ticker (^NSEI, URL-encoded as %5ENSEI). Uses /api when
+  // deployed on Vercel, otherwise public relays — same fallback logic as everything else.
+  try { return await P.getIndexHistory('%5ENSEI', 'NIFTY 50', '5y'); } catch (_) { return null; }
 }
 
 // ---------------- rendering ----------------
@@ -339,14 +315,56 @@ function renderRiskPanel(R) {
 function renderFundamentals(R) {
   const host = $('#panel-fundamentals'); if (!host) return;
   const fu = R.fu;
+  if (!fu || !fu.available) {
+    host.innerHTML = `
+      <div class="card unavailable">
+        <h3>Fundamentals, valuation & growth</h3>
+        <div class="na-banner">⚠️ Not available on this deployment</div>
+        <p>${fu ? fu.reason : 'No fundamentals returned.'}</p>
+        ${fu && fu.fields ? `<p class="muted">Fields the server proxy would populate: ${fu.fields.map((f) => `<span class="chip">${f}</span>`).join(' ')}</p>` : ''}
+        <p class="muted small">Per spec §36.1-2 these are shown as <b>unavailable</b> rather than filled with invented numbers. Deploy on Vercel (with the <code>/api/quote</code> function) to enable them.</p>
+      </div>`;
+    return;
+  }
+  const pc = (d) => (d == null ? '—' : fmtNum(d * 100) + '%');
+  const cr = (n) => (n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 2 }));
+  const v = fu.valuation || {}, p = fu.profitability || {}, g = fu.growth || {}, h = fu.health || {};
   host.innerHTML = `
-    <div class="card unavailable">
-      <h3>Fundamentals, valuation & growth</h3>
-      <div class="na-banner">⚠️ Not available in this browser-only build</div>
-      <p>${fu.reason}</p>
-      <p class="muted">Fields that a backend deployment would populate: ${fu.fields.map((f) => `<span class="chip">${f}</span>`).join(' ')}</p>
-      <p class="muted small">Per spec §36.1-2 these are shown as <b>unavailable</b> rather than filled with invented numbers. See README → "Backend extension points" for the FastAPI provider layer that supplies them.</p>
-    </div>`;
+    <div class="grid2">
+      <div class="card"><h3>Valuation</h3><table class="kv">
+        <tr><td>Trailing P/E</td><td>${fmtNum(v.trailingPE)}</td></tr>
+        <tr><td>Forward P/E</td><td>${fmtNum(v.forwardPE)}</td></tr>
+        <tr><td>P/B</td><td>${fmtNum(v.priceToBook)}</td></tr>
+        <tr><td>PEG</td><td>${fmtNum(v.pegRatio)}</td></tr>
+        <tr><td>Price / Sales</td><td>${fmtNum(v.priceToSales)}</td></tr>
+        <tr><td>EV / EBITDA</td><td>${fmtNum(v.enterpriseToEbitda)}</td></tr>
+        <tr><td>Dividend yield</td><td>${pc(v.dividendYield)}</td></tr>
+        <tr><td>Market cap</td><td>${cr(v.marketCap)}</td></tr>
+      </table></div>
+      <div class="card"><h3>Profitability</h3><table class="kv">
+        <tr><td>ROE</td><td>${pc(p.returnOnEquity)}</td></tr>
+        <tr><td>ROA</td><td>${pc(p.returnOnAssets)}</td></tr>
+        <tr><td>Gross margin</td><td>${pc(p.grossMargins)}</td></tr>
+        <tr><td>Operating margin</td><td>${pc(p.operatingMargins)}</td></tr>
+        <tr><td>Net margin</td><td>${pc(p.profitMargins)}</td></tr>
+      </table></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Growth</h3><table class="kv">
+        <tr><td>Revenue growth (YoY)</td><td>${pc(g.revenueGrowth)}</td></tr>
+        <tr><td>Earnings growth (YoY)</td><td>${pc(g.earningsGrowth)}</td></tr>
+        <tr><td>Earnings growth (Qtr YoY)</td><td>${pc(g.earningsQuarterlyGrowth)}</td></tr>
+      </table></div>
+      <div class="card"><h3>Financial health</h3><table class="kv">
+        <tr><td>Debt / Equity</td><td>${h.debtToEquity == null ? '—' : fmtNum(h.debtToEquity / 100) + 'x'}</td></tr>
+        <tr><td>Current ratio</td><td>${fmtNum(h.currentRatio)}</td></tr>
+        <tr><td>Total cash</td><td>${cr(h.totalCash)}</td></tr>
+        <tr><td>Total debt</td><td>${cr(h.totalDebt)}</td></tr>
+        <tr><td>Free cash flow</td><td class="${h.freeCashflow > 0 ? 'pos' : h.freeCashflow < 0 ? 'neg' : ''}">${cr(h.freeCashflow)}</td></tr>
+        <tr><td>Operating cash flow</td><td>${cr(h.operatingCashflow)}</td></tr>
+      </table></div>
+    </div>
+    <p class="stamp">Source: ${fu.source} · fetched ${fmtDateTime(fu.asOf)}${fu.cached ? ' (cached)' : ''}. Values are as reported by the data vendor; ratios that were not returned show “—”, never a guess.</p>`;
 }
 
 function renderNewsOwnership(R) {
@@ -381,8 +399,8 @@ function renderAudit(R) {
         <ul>
           <li>No price or ratio is fabricated; failed fetches show an error, not a guess.</li>
           <li>Data is delayed (Yahoo India), never presented as real-time — timestamps shown above.</li>
-          <li>Fundamentals / news / ownership / backtesting need a backend and are marked unavailable.</li>
-          <li>All indicators computed in-browser by <code>indicators.js</code> (deterministic), verified by a console self-test.</li>
+          <li>Fundamentals come from the <code>/api/quote</code> server proxy when deployed; news / ownership / backtesting still need further integrations and are marked unavailable.</li>
+          <li>All indicators computed by <code>indicators.js</code> (deterministic), verified by a console self-test.</li>
         </ul>
       </div>
     </div>`;

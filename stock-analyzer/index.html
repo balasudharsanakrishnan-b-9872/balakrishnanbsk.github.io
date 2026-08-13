@@ -38,7 +38,7 @@
         <button class="quick-btn" data-s="ITC">ITC</button>
       </div>
       <div class="notice">
-        <b>Honest scope.</b> This is a <b>browser-only</b> build hosted on GitHub Pages, so it works with what a browser can legally reach: <b>price/volume history</b> (Yahoo Finance, delayed, via public CORS relays) → technicals, trend, returns, volatility, beta, relative strength, and a transparent score. Fundamentals, valuation, ownership, news &amp; backtesting need a server with API keys and are shown as <b>unavailable</b> rather than invented. See the README for the backend that fills those in.
+        <b>Honest scope.</b> On the <b>Vercel</b> deployment, serverless functions proxy Yahoo Finance server-side, so this covers <b>price/volume history</b> → technicals, trend, returns, volatility, beta, relative strength, <b>plus fundamentals</b> (P/E, P/B, ROE, margins, debt, cash flow, growth) feeding a transparent score. Data is <b>delayed</b>, never real-time, and always timestamped. Ownership, news &amp; backtesting need further data integrations and are shown as <b>unavailable</b> rather than invented. (On static hosting without the <code>/api</code> functions, the app falls back to public relays and fundamentals show as unavailable.)
       </div>
     </section>
 

@@ -182,19 +182,79 @@ function scoreRisk(rk) {
 }
 
 const clamp = (x) => Math.max(0, Math.min(100, Math.round(x)));
+const pct = (d) => (d == null ? null : d * 100); // Yahoo decimals -> percent
 
-export function buildScore({ technical: t, trend: tr, relStrength: rs, risk: rk, fundamentals, ownership, news }) {
+// ---- fundamental scorers (only run when the /api/quote proxy supplied real data) ----
+// Each returns {score, notes} or {score:null} when the needed fields are absent.
+function scoreFundamentals(f) {
+  if (!f || !f.available) return { score: null, notes: [] };
+  const p = f.profitability || {};
+  const roe = pct(p.returnOnEquity), margin = pct(p.profitMargins), roa = pct(p.returnOnAssets);
+  const parts = [], notes = [];
+  if (roe != null) { parts.push(band(roe, [[20, 95], [15, 80], [10, 62], [5, 45], [0, 28], [-1e9, 12]])); notes.push(`ROE ${I.round(roe)}%`); }
+  if (margin != null) { parts.push(band(margin, [[20, 92], [12, 75], [6, 58], [2, 42], [0, 30], [-1e9, 12]])); notes.push(`Net margin ${I.round(margin)}%`); }
+  if (roa != null) { parts.push(band(roa, [[12, 90], [7, 72], [3, 55], [0, 38], [-1e9, 18]])); notes.push(`ROA ${I.round(roa)}%`); }
+  if (!parts.length) return { score: null, notes: [] };
+  return { score: clamp(avg(parts)), notes };
+}
+
+function scoreGrowth(f) {
+  if (!f || !f.available) return { score: null, notes: [] };
+  const g = f.growth || {};
+  const rev = pct(g.revenueGrowth), earn = pct(g.earningsGrowth ?? g.earningsQuarterlyGrowth);
+  const parts = [], notes = [];
+  if (rev != null) { parts.push(band(rev, [[25, 92], [15, 78], [8, 62], [3, 48], [0, 35], [-1e9, 18]])); notes.push(`Revenue growth ${I.round(rev)}%`); }
+  if (earn != null) { parts.push(band(earn, [[25, 92], [15, 78], [8, 62], [0, 45], [-1e9, 20]])); notes.push(`Earnings growth ${I.round(earn)}%`); }
+  if (!parts.length) return { score: null, notes: [] };
+  return { score: clamp(avg(parts)), notes };
+}
+
+function scoreHealth(f) {
+  if (!f || !f.available) return { score: null, notes: [] };
+  const h = f.health || {};
+  const parts = [], notes = [];
+  if (h.debtToEquity != null) { const de = h.debtToEquity / 100; parts.push(band(de, [[0.25, 92], [0.5, 78], [1, 60], [2, 40], [1e9, 20]], true)); notes.push(`D/E ${I.round(de)}x`); }
+  if (h.currentRatio != null) { parts.push(band(h.currentRatio, [[2, 88], [1.5, 75], [1, 58], [0.8, 42], [-1e9, 25]])); notes.push(`Current ratio ${I.round(h.currentRatio)}`); }
+  if (h.freeCashflow != null) { parts.push(h.freeCashflow > 0 ? 80 : 25); notes.push(h.freeCashflow > 0 ? 'Positive FCF' : 'Negative FCF'); }
+  if (h.totalCash != null && h.totalDebt != null) { parts.push(h.totalCash >= h.totalDebt ? 85 : 55); notes.push(h.totalCash >= h.totalDebt ? 'Net cash' : 'Net debt'); }
+  if (!parts.length) return { score: null, notes: [] };
+  return { score: clamp(avg(parts)), notes };
+}
+
+function scoreValuation(f, sector) {
+  if (!f || !f.available) return { score: null, notes: [] };
+  const v = f.valuation || {};
+  const parts = [], notes = [];
+  const isBank = sector === 'BANK';
+  if (v.pegRatio != null && v.pegRatio > 0) { parts.push(band(v.pegRatio, [[1, 88], [1.5, 72], [2, 55], [3, 38], [1e9, 22]], true)); notes.push(`PEG ${I.round(v.pegRatio)}`); }
+  if (isBank && v.priceToBook != null) { parts.push(band(v.priceToBook, [[1, 88], [2, 72], [3, 55], [5, 38], [1e9, 22]], true)); notes.push(`P/B ${I.round(v.priceToBook)} (bank)`); }
+  else if (v.trailingPE != null && v.trailingPE > 0) { parts.push(band(v.trailingPE, [[15, 85], [25, 68], [40, 50], [60, 34], [1e9, 20]], true)); notes.push(`P/E ${I.round(v.trailingPE)}`); }
+  if (v.dividendYield != null) { const dy = pct(v.dividendYield); if (dy > 0) { parts.push(band(dy, [[3, 80], [1.5, 65], [0.5, 55], [-1e9, 48]])); notes.push(`Div yield ${I.round(dy)}%`); } }
+  if (!parts.length) return { score: null, notes: [] };
+  return { score: clamp(avg(parts)), notes };
+}
+
+// band(value, [[threshold, score], ...]) — descending thresholds; `invert` for
+// "lower is better" metrics (thresholds ascending, first match wins).
+function band(v, table, invert = false) {
+  if (invert) { for (const [th, sc] of table) if (v <= th) return sc; return table[table.length - 1][1]; }
+  for (const [th, sc] of table) if (v >= th) return sc; return table[table.length - 1][1];
+}
+const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+// flag a component "unavailable" when it couldn't be scored (so the UI shows why)
+const mark = (res, f) => ({ ...res, unavailable: res.score == null });
+
+export function buildScore({ technical: t, trend: tr, relStrength: rs, risk: rk, fundamentals, ownership, news, sector }) {
   const components = {
     technical: scoreTechnical(t, tr),
     relativeStrength: scoreRelStrength(rs),
     risk: scoreRisk(rk),
-    // The following are honestly unavailable in the browser-only build:
-    fundamentals: { score: null, notes: [], unavailable: fundamentals && !fundamentals.available },
-    growth: { score: null, notes: [], unavailable: true },
-    financialHealth: { score: null, notes: [], unavailable: true },
-    valuation: { score: null, notes: [], unavailable: true },
-    ownership: { score: null, notes: [], unavailable: ownership && !ownership.available },
-    news: { score: null, notes: [], unavailable: news && !news.available },
+    fundamentals: mark(scoreFundamentals(fundamentals), fundamentals),
+    growth: mark(scoreGrowth(fundamentals), fundamentals),
+    financialHealth: mark(scoreHealth(fundamentals), fundamentals),
+    valuation: mark(scoreValuation(fundamentals, sector), fundamentals),
+    ownership: { score: null, notes: [], unavailable: !(ownership && ownership.available) },
+    news: { score: null, notes: [], unavailable: !(news && news.available) },
   };
 
   // Renormalize weights over the components we could actually score.
