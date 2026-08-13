@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Indian Equity Analyzer</title>
+  <meta name="description" content="Data-driven Indian (NSE) equity research & investment decision-support. Transparent scoring, no fabricated data." />
+  <link rel="stylesheet" href="css/styles.css" />
+  <!-- Chart.js via CDN (allowed on GitHub Pages; pinned major version) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">📊</span>
+      <div>
+        <h1>Indian Equity Analyzer</h1>
+        <p>Data-driven NSE equity research &amp; investment decision support</p>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <input id="search" type="text" placeholder="Search: RELIANCE, TCS, HDFCBANK, INFY…" autocomplete="off" spellcheck="false" />
+      <div id="suggestions" class="suggestions"></div>
+    </div>
+  </header>
+
+  <main>
+    <section id="intro" class="intro">
+      <h2>Analyze any NSE-listed stock</h2>
+      <p>Type a symbol or company name above. The tool fetches <b>live price history</b>, computes technical / trend / risk metrics deterministically, and produces a <b>transparent weighted score</b> with an explicit decision, confidence and data-quality reading.</p>
+      <div class="quick">
+        <span>Try:</span>
+        <button class="quick-btn" data-s="RELIANCE">RELIANCE</button>
+        <button class="quick-btn" data-s="TCS">TCS</button>
+        <button class="quick-btn" data-s="HDFCBANK">HDFCBANK</button>
+        <button class="quick-btn" data-s="INFY">INFY</button>
+        <button class="quick-btn" data-s="TATAMOTORS">TATAMOTORS</button>
+        <button class="quick-btn" data-s="ITC">ITC</button>
+      </div>
+      <div class="notice">
+        <b>Honest scope.</b> This is a <b>browser-only</b> build hosted on GitHub Pages, so it works with what a browser can legally reach: <b>price/volume history</b> (Yahoo Finance, delayed, via public CORS relays) → technicals, trend, returns, volatility, beta, relative strength, and a transparent score. Fundamentals, valuation, ownership, news &amp; backtesting need a server with API keys and are shown as <b>unavailable</b> rather than invented. See the README for the backend that fills those in.
+      </div>
+    </section>
+
+    <section id="result" style="display:none"></section>
+
+    <section class="card watchlist-card">
+      <h3>★ Watchlist</h3>
+      <div id="watchlist"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p><b>Disclaimer:</b> Quantitative analytical signals from publicly available, delayed data. <b>Not</b> investment advice, not a prediction of future returns, and not a guarantee of any outcome. Verify independently before investing.</p>
+    <p class="muted small">Data relays tried in order: <span id="relays"></span> · Prices are delayed, never real-time · No values are fabricated when a source fails.</p>
+  </footer>
+
+  <!-- Tabs template cloned into each result render -->
+  <template id="tabs-template">
+    <div class="tabs">
+      <button class="tab active" data-tab="overview">Overview</button>
+      <button class="tab" data-tab="score">Score</button>
+      <button class="tab" data-tab="technical">Technical</button>
+      <button class="tab" data-tab="risk">Price &amp; Risk</button>
+      <button class="tab" data-tab="charts">Charts</button>
+      <button class="tab" data-tab="fundamentals">Fundamentals</button>
+      <button class="tab" data-tab="news">News &amp; Ownership</button>
+      <button class="tab" data-tab="audit">Data &amp; Audit</button>
+    </div>
+    <div id="panel-overview" class="tab-panel active"></div>
+    <div id="panel-score" class="tab-panel"></div>
+    <div id="panel-technical" class="tab-panel"></div>
+    <div id="panel-risk" class="tab-panel"></div>
+    <div id="panel-charts" class="tab-panel">
+      <div class="card">
+        <div class="range-row">
+          <button class="range-btn" data-range="1M">1M</button>
+          <button class="range-btn" data-range="3M">3M</button>
+          <button class="range-btn" data-range="6M">6M</button>
+          <button class="range-btn active" data-range="1Y">1Y</button>
+          <button class="range-btn" data-range="3Y">3Y</button>
+          <button class="range-btn" data-range="5Y">5Y</button>
+          <button class="range-btn" data-range="MAX">MAX</button>
+        </div>
+        <h4>Price with SMA 50 / 200</h4><div class="chart-box"><canvas id="chartPrice"></canvas></div>
+        <h4>Volume</h4><div class="chart-box"><canvas id="chartVolume"></canvas></div>
+        <h4>RSI (14)</h4><div class="chart-box"><canvas id="chartRsi"></canvas></div>
+      </div>
+    </div>
+    <div id="panel-fundamentals" class="tab-panel"></div>
+    <div id="panel-news" class="tab-panel"></div>
+    <div id="panel-audit" class="tab-panel"></div>
+  </template>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
