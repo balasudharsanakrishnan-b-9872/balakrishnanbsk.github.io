@@ -46,7 +46,10 @@ as **unavailable** rather than being invented.
 The app is built to be honest about what it can and can't know.
 
 ### What works on Vercel (with the `/api` functions)
-- **Search** across a curated NSE universe (symbol / name / industry) + any `.NS` symbol.
+- **Search / analyze any listed stock** — a curated shortlist powers autocomplete, but you
+  can analyze **any NSE symbol** (typed directly) or **any BSE scrip code** (numeric, e.g.
+  `500325`). Data is fetched live per-symbol; NSE is tried first with an automatic BSE
+  fallback, so you are not limited to the shortlist.
 - **Live price & volume history** via `/api/history` (Yahoo Finance, delayed).
 - **Technical analysis** — SMA 20/50/100/200, EMA 20/50, RSI 14, MACD, Bollinger, ATR,
   ADX, volume signals, 52-week high/low, golden/death cross.
@@ -141,5 +144,7 @@ Open the browser console to see the indicator self-test on load.
 - Yahoo’s fundamentals (crumb) handshake changes often; `api/quote.js` degrades honestly to
   “unavailable” when it breaks. A licensed feed (Alpha Vantage / FMP / vendor) removes the
   fragility — repoint `api/quote.js` at it and the scoring engine picks it up automatically.
-- The universe in `stocks.js` is a curated cross-sector sample; extend as needed — any valid
-  `.NS` symbol can be analyzed by typing it directly.
+- `stocks.js` holds only a curated shortlist for autocomplete convenience — it is **not** the
+  limit of what can be analyzed. Any valid NSE symbol or BSE scrip code can be typed directly
+  (`toYahoo`/`altYahoo` resolve NSE `.NS` with a BSE `.BO` fallback). Yahoo Finance coverage
+  of the specific ticker is the only real constraint.

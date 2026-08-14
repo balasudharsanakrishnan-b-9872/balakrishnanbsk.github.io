@@ -59,6 +59,8 @@ code { background: #0b1220; padding: 1px 5px; border-radius: 4px; font-size: .85
 .suggestion b { color: var(--accent); }
 .suggestion span { flex: 1; }
 .suggestion em { color: var(--text-dim); font-size: .78rem; font-style: normal; }
+.suggestion.direct { border-top: 1px dashed var(--border); }
+.suggestion.direct b { color: var(--accent-2); }
 
 /* ---------- layout ---------- */
 main { max-width: 1080px; margin: 0 auto; padding: 1.4rem; }

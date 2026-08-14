@@ -12,7 +12,7 @@
 //  * Data is delayed (Yahoo India), never presented as real-time; timestamps are shown.
 //  * On any failure we surface an error — we NEVER fabricate a price or ratio (spec §36.1).
 
-import { toYahoo } from './stocks.js';
+import { toYahoo, altYahoo } from './stocks.js';
 
 // Public CORS relays (fallback path only), tried in order.
 const CORS_RELAYS = [
@@ -100,40 +100,47 @@ async function tryLocalApi(path) {
   } catch (_) { return null; } // network/404 — API not present, caller falls back
 }
 
-// ---------- price history ----------
-export async function getHistory(nseSymbol, range = '5y', interval = '1d') {
-  const ykey = toYahoo(nseSymbol);
-  const cacheKey = `hist_${ykey}_${range}_${interval}`;
+// Fetch+parse one Yahoo chart for a fully-resolved RAW ticker (e.g. RELIANCE.NS, 500325.BO,
+// ^NSEI). Tries our serverless proxy first, then public relays. Throws on failure.
+async function fetchChart(displaySymbol, ticker, range, interval) {
+  const enc = encodeURIComponent(ticker);
+  const local = await tryLocalApi(`/api/history?symbol=${enc}&range=${range}&interval=${interval}`);
+  if (local && local.ok && local.json?.chart?.result?.[0]) {
+    return parseChart(displaySymbol, ticker, local.json, 'Yahoo Finance (server proxy /api)', location.host);
+  }
+  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${enc}?range=${range}&interval=${interval}`;
+  const { json, via } = await fetchJSONviaRelays(target);
+  return parseChart(displaySymbol, ticker, json, 'Yahoo Finance (v8/chart via public relay)', via);
+}
+
+// ---------- price history (NSE with automatic BSE fallback) ----------
+export async function getHistory(symbol, range = '5y', interval = '1d') {
+  const primary = toYahoo(symbol);
+  const alt = altYahoo(symbol);
+  const cacheKey = `hist_${primary}_${range}_${interval}`;
   const cached = cacheGet(cacheKey, CACHE_TTL.history);
   if (cached) return { ...cached, cached: true };
 
-  // Mode 1: our serverless proxy.
-  const local = await tryLocalApi(`/api/history?symbol=${encodeURIComponent(nseSymbol)}&range=${range}&interval=${interval}`);
-  if (local && local.ok && local.json?.chart) {
-    const payload = parseChart(nseSymbol, ykey, local.json, 'Yahoo Finance (server proxy /api)', location.host);
-    cacheSet(cacheKey, payload);
-    return payload;
+  let payload, firstErr;
+  try { payload = await fetchChart(symbol, primary, range, interval); }
+  catch (e) {
+    firstErr = e;
+    if (!alt) throw e;
+    payload = await fetchChart(symbol, alt, range, interval); // e.g. BSE-only listing
   }
-
-  // Mode 2: public CORS relays on the direct Yahoo URL.
-  const target = `https://query1.finance.yahoo.com/v8/finance/chart/${ykey}?range=${range}&interval=${interval}`;
-  const { json, via } = await fetchJSONviaRelays(target);
-  const payload = parseChart(nseSymbol, ykey, json, 'Yahoo Finance (v8/chart via public relay)', via);
+  payload.exchange = payload.yahoo.endsWith('.BO') ? 'BSE' : payload.yahoo.endsWith('.NS') ? 'NSE' : payload.meta.exchange;
   cacheSet(cacheKey, payload);
   return payload;
 }
 
-// Raw history for index tickers (^NSEI etc.) — used for benchmark.
+// History for index tickers (^NSEI etc.) — used for benchmark.
 export async function getIndexHistory(yahooTicker, name, range = '5y') {
-  const cacheKey = `idx_${yahooTicker}_${range}`;
+  const ticker = decodeURIComponent(yahooTicker); // accept raw or pre-encoded
+  const cacheKey = `idx_${ticker}_${range}`;
   const cached = cacheGet(cacheKey, CACHE_TTL.history);
   if (cached) return { ...cached, cached: true };
-  const local = await tryLocalApi(`/api/history?symbol=${encodeURIComponent(yahooTicker)}&range=${range}&interval=1d`);
-  let json, via;
-  if (local && local.ok && local.json?.chart) { json = local.json; via = location.host; }
-  else { const r = await fetchJSONviaRelays(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?range=${range}&interval=1d`); json = r.json; via = r.via; }
-  const p = parseChart(name, yahooTicker, json, 'Yahoo Finance', via);
-  const out = { name, bars: p.bars, source: p.source, via };
+  const p = await fetchChart(name, ticker, range, '1d');
+  const out = { name, bars: p.bars, source: p.source, via: p.via };
   cacheSet(cacheKey, out);
   return out;
 }
@@ -145,7 +152,7 @@ export async function getFundamentals(nseSymbol) {
   const cached = cacheGet(cacheKey, CACHE_TTL.quote);
   if (cached) return { ...cached, cached: true };
 
-  const local = await tryLocalApi(`/api/quote?symbol=${encodeURIComponent(nseSymbol)}`);
+  const local = await tryLocalApi(`/api/quote?symbol=${encodeURIComponent(toYahoo(nseSymbol))}`);
   if (local && local.ok && local.json) {
     if (local.json.available) cacheSet(cacheKey, local.json);
     return local.json; // {available:true, ...} or {available:false, reason}

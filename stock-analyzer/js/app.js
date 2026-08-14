@@ -39,18 +39,36 @@ function wireQuickButtons() {
 function wireSearch() {
   const input = $('#search');
   const box = $('#suggestions');
-  input.addEventListener('input', () => {
-    const results = searchStocks(input.value);
+  const renderSuggestions = () => {
+    const q = input.value.trim();
     box.innerHTML = '';
-    if (!results.length) { box.style.display = 'none'; return; }
+    if (!q) { box.style.display = 'none'; return; }
+    const results = searchStocks(q);
     results.forEach((st) => {
       const item = el('div', 'suggestion', `<b>${st.s}</b> <span>${st.n}</span><em>${SECTORS[st.sector]}</em>`);
       item.onclick = () => { input.value = st.s; box.style.display = 'none'; runAnalysis(st.s); };
       box.appendChild(item);
     });
+    // Always offer a "analyze directly" row so ANY NSE symbol or BSE code works,
+    // not just the curated shortlist. Data is fetched live per-symbol.
+    const up = q.toUpperCase();
+    if (!results.some((r) => r.s === up)) {
+      const kind = /^\d+$/.test(up) ? 'BSE scrip code' : 'NSE symbol (BSE fallback)';
+      const direct = el('div', 'suggestion direct', `<b>${up}</b> <span>Analyze this symbol directly</span><em>${kind}</em>`);
+      direct.onclick = () => { box.style.display = 'none'; runAnalysis(up); };
+      box.appendChild(direct);
+    }
     box.style.display = 'block';
+  };
+  input.addEventListener('input', renderSuggestions);
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const q = input.value.trim().toUpperCase();
+    if (!q) return;
+    box.style.display = 'none';
+    const r = searchStocks(q);
+    runAnalysis(r[0] ? r[0].s : q); // known name if matched, else analyze the raw symbol/code
   });
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const r = searchStocks(input.value); if (r[0]) { box.style.display = 'none'; runAnalysis(r[0].s); } } });
   document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrap')) box.style.display = 'none'; });
 }
 
@@ -142,8 +160,8 @@ function renderAll(R) {
   verdict.innerHTML = `
     <div class="verdict-head">
       <div>
-        <h2>${meta.n} <span class="sym">${meta.s}.NS</span></h2>
-        <div class="tags"><span class="tag">${SECTORS[meta.sector]}</span><span class="tag">${meta.industry}</span><span class="tag">${data.meta.exchange}</span></div>
+        <h2>${meta.n} <span class="sym">${data.yahoo || meta.s}</span></h2>
+        <div class="tags"><span class="tag">${SECTORS[meta.sector]}</span><span class="tag">${meta.industry}</span><span class="tag">${data.exchange || data.meta.exchange}</span></div>
       </div>
       <button class="wl-btn" id="wlToggle">${inWatchlist(meta.s) ? '★ In watchlist' : '☆ Watchlist'}</button>
     </div>

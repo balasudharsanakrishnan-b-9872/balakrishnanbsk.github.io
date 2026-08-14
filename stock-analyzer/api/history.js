@@ -13,9 +13,10 @@ module.exports = async (req, res) => {
     const { symbol = '', range = '5y', interval = '1d' } = req.query || {};
     if (!symbol) return res.status(400).json({ error: 'symbol query param is required' });
 
-    // Accept either a bare NSE symbol (RELIANCE) or an explicit Yahoo ticker (^NSEI, RELIANCE.NS).
+    // Accept a bare NSE symbol (RELIANCE), a BSE scrip code (500325), or an explicit
+    // Yahoo ticker (^NSEI, RELIANCE.NS, 500325.BO).
     const raw = String(symbol).trim();
-    const ticker = raw.startsWith('^') || raw.includes('.') ? raw : `${raw}.NS`;
+    const ticker = raw.startsWith('^') || raw.includes('.') ? raw : /^\d+$/.test(raw) ? `${raw}.BO` : `${raw}.NS`;
     const url =
       `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
       `?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;

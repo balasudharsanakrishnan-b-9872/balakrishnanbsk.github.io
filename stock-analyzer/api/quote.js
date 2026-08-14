@@ -39,7 +39,7 @@ const num = (o) => (o && typeof o === 'object' && 'raw' in o ? o.raw : o == null
 module.exports = async (req, res) => {
   const symbol = String((req.query && req.query.symbol) || '').trim();
   if (!symbol) return res.status(400).json({ available: false, reason: 'symbol required' });
-  const ticker = symbol.includes('.') ? symbol : `${symbol}.NS`;
+  const ticker = symbol.includes('.') ? symbol : /^\d+$/.test(symbol) ? `${symbol}.BO` : `${symbol}.NS`;
 
   try {
     const { cookie, crumb } = await getCrumb();

@@ -116,10 +116,24 @@ export const SECTOR_INDEX = {
   METAL:   { n: 'NIFTY Metal',   yahoo: 'NIFTYMETAL.NS' },
 };
 
-// Convert an NSE symbol to a Yahoo Finance ticker. Yahoo uses ".NS" for NSE and
-// URL-encodes special characters (e.g. M&M -> M%26M.NS).
-export function toYahoo(nseSymbol) {
-  return encodeURIComponent(nseSymbol) + '.NS';
+// Resolve a user-typed symbol to a RAW Yahoo Finance ticker (callers URL-encode at
+// build time, so special chars like & are handled once, not twice).
+//  * explicit ticker / index (has "." or starts with "^") -> used as-is (e.g. TCS.NS, ^NSEI)
+//  * all-numeric -> treated as a BSE scrip code (e.g. 500325 -> 500325.BO)
+//  * otherwise -> NSE alphabetic ticker (e.g. RELIANCE -> RELIANCE.NS)
+export function toYahoo(symbol) {
+  const s = String(symbol).trim().toUpperCase();
+  if (s.startsWith('^') || s.includes('.')) return s;
+  if (/^\d+$/.test(s)) return s + '.BO'; // BSE scrip code
+  return s + '.NS'; // NSE
+}
+
+// The "other exchange" ticker to try if the primary lookup fails, so a symbol listed only
+// on BSE still resolves. Returns null when there's nothing to fall back to.
+export function altYahoo(symbol) {
+  const s = String(symbol).trim().toUpperCase();
+  if (s.startsWith('^') || s.includes('.') || /^\d+$/.test(s)) return null;
+  return s + '.BO'; // NSE alphabetic -> try BSE as fallback
 }
 
 // Fuzzy search over symbol + name + industry.
