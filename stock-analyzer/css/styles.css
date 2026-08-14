@@ -122,10 +122,11 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 .brand h1 .accent { background: var(--brand-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .brand p { font-size: .68rem; color: var(--dim); letter-spacing: .12em; text-transform: uppercase; font-weight: 500; }
 .search-wrap { position: relative; flex: 1; min-width: 240px; max-width: 520px; }
-.search-inner { position: relative; display: flex; align-items: center; }
-.search-inner .ic { position: absolute; left: 13px; color: var(--faint); pointer-events: none; }
+.search-inner { position: relative; display: block; }
+/* direct child only — must NOT cascade to the <svg> nested inside the icon span */
+.search-inner > .ic { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--faint); pointer-events: none; }
 #search {
-  width: 100%; padding: .72rem 1rem .72rem 2.5rem; border-radius: 12px;
+  width: 100%; padding: .72rem 1rem .72rem 2.7rem; border-radius: 12px;
   border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text);
   font: inherit; font-size: .95rem; outline: none; transition: border-color .15s, box-shadow .15s, background .15s;
 }
