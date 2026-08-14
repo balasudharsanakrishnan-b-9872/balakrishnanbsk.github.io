@@ -197,8 +197,22 @@ main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.3rem 0; }
 
 /* ---------------- Markets home ---------------- */
 .brand { cursor: pointer; }
-.home-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .6rem; margin: .3rem 0 1rem; }
+.home-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .6rem 1rem; margin: .3rem 0 1rem; }
+.home-title-row { display: flex; align-items: center; gap: .7rem; }
 .home-title { font-size: 1.5rem; }
+.icon-btn.sm { width: 32px; height: 32px; border-radius: 9px; }
+.icon-btn.sm .ic { width: 16px; height: 16px; }
+.mkt-status { display: inline-flex; align-items: center; gap: .4rem; font-size: .74rem; font-weight: 600; padding: .28rem .6rem; border-radius: 999px; border: 1px solid var(--border-2); color: var(--dim); }
+.mkt-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.mkt-status.open { color: var(--pos); border-color: color-mix(in srgb,var(--pos) 40%,transparent); background: color-mix(in srgb,var(--pos) 10%,transparent); }
+.mkt-status.open .dot { background: var(--pos); box-shadow: 0 0 0 3px color-mix(in srgb,var(--pos) 25%,transparent); }
+.breadth-card { padding: .8rem 1.2rem; }
+.breadth-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: .5rem; font-size: .84rem; font-weight: 600; }
+.breadth-head .ic { color: var(--brand); vertical-align: -3px; }
+.breadth-bar { display: flex; height: 9px; border-radius: 999px; overflow: hidden; background: var(--surface-2); }
+.breadth-bar i { display: block; }
+.breadth-bar .adv { background: var(--pos); }
+.breadth-bar .dec { background: var(--neg); }
 .indices-strip { display: flex; gap: 1.2rem; flex-wrap: wrap; }
 .idx { display: flex; align-items: baseline; gap: .45rem; font-size: .86rem; }
 .idx-nm { color: var(--dim); font-weight: 600; letter-spacing: .02em; }
@@ -334,7 +348,10 @@ table { width: 100%; border-collapse: collapse; }
 .wl-chip { cursor: pointer; display: inline-flex; align-items: center; gap: .45rem; background: var(--surface-2); border: 1px solid var(--border-2); border-radius: 999px; padding: .35rem .5rem .35rem .8rem; font-size: .84rem; transition: border-color .15s; }
 .wl-chip:hover { border-color: var(--brand); }
 .wl-chip b { font-family: 'JetBrains Mono', monospace; color: var(--text); }
+.wl-chip .wl-px { font-family: 'JetBrains Mono', monospace; font-size: .8rem; margin-left: .2rem; }
+.wl-chip .wl-chg { font-family: 'JetBrains Mono', monospace; font-size: .78rem; font-weight: 600; margin-left: .35rem; }
 .wl-chip .del { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--faint); }
+@media (max-width: 520px) { .wl-chip .wl-nm { display: none; } }
 .wl-chip .del:hover { color: var(--neg); background: color-mix(in srgb,var(--neg) 12%,transparent); }
 
 /* loading / error */

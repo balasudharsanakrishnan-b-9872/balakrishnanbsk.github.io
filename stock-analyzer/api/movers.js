@@ -43,6 +43,9 @@ module.exports = async (req, res) => {
       changePct: num(q.regularMarketChangePercent),
       volume: num(q.regularMarketVolume),
       avgVolume: num(q.averageDailyVolume3Month) ?? num(q.averageDailyVolume10Day),
+      high52: num(q.fiftyTwoWeekHigh),
+      low52: num(q.fiftyTwoWeekLow),
+      marketCap: num(q.marketCap),
     })).filter((x) => x.price != null);
     if (!list.length) return res.status(200).json({ available: false, reason: 'no quotes returned' });
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');

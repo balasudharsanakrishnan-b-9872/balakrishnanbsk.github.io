@@ -53,10 +53,13 @@ as **unavailable** rather than being invented.
 The app is built to be honest about what it can and can't know.
 
 ### What works on Vercel (with the `/api` functions)
-- **Markets home page** — on load, a dashboard of **top gainers, losers, most-active (by
-  value), volume shockers and trending sectors**, plus a NIFTY 50 / SENSEX strip, computed
-  from the tracked universe via `/api/movers`. Click any row to analyse that stock; click
-  the logo to return. (Shows an honest "unavailable" card on static hosting.)
+- **Markets home page** — on load, a dashboard computed from the tracked universe via
+  `/api/movers`: **top gainers, top losers, most-active (by value & by volume), volume
+  shockers, most valuable (by m-cap), near 52-week high / low, trending sectors**, a
+  **market-breadth** bar (advances vs declines), a **market open/closed** badge, a NIFTY 50
+  / SENSEX strip and a **refresh** button. The **watchlist shows live prices** here. Click
+  any row to analyse that stock; click the logo to return. (Honest "unavailable" card on
+  static hosting.)
 - **Search by company name** (live) — type "reliance", "hdfc", "infosys" and pick from real
   listed matches via `/api/search` (Yahoo symbol directory), each tagged **NSE** or **BSE**
   so same-name dual listings are disambiguated by what you click. You can still type an exact
@@ -168,7 +171,7 @@ it serves the app locally and mocks the network layer (Yahoo / `/api` + Chart.js
 Playwright, then drives the real app end-to-end and runs an axe-core audit.
 
 ```bash
-cd tests && npm install && npm test   # 50 checks; exits non-zero on failure
+cd tests && npm install && npm test   # 56 checks; exits non-zero on failure
 ```
 
 Covers search, the full analysis render, all tabs, charts, watchlist & theme persistence,

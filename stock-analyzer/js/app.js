@@ -18,6 +18,7 @@ const fmtDateTime = (ms) => (ms ? new Date(ms).toLocaleString('en-IN', { dateSty
 let CURRENT = null; // last analysis result
 let CHART_RANGE = '1Y';
 let loading = false; // true while an analysis is in flight — blocks new requests
+let lastQuotes = new Map(); // symbol -> latest quote (from the home movers fetch) for the live watchlist
 
 // Testing seam: with ?e2e=1 expose render internals so an automated harness can render
 // a fixture offline (it exposes no data of its own — the caller supplies everything).
@@ -581,14 +582,30 @@ function showHome() {
 }
 function hideHome() { const h = $('#home'); if (h) h.style.display = 'none'; }
 
-async function loadHome() {
+async function loadHome(force) {
   const host = $('#home'); if (!host) return;
   showHome();
-  host.innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading market movers…</p></div>`;
-  const syms = STOCK_UNIVERSE.map((s) => toYahoo(s.s));
-  const [movers, indices] = await Promise.all([P.getMovers(syms), loadIndices()]);
+  if (!force) host.innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading market movers…</p></div>`;
+  // Fetch quotes for the tracked universe PLUS any watchlist symbols, so the watchlist
+  // can show live prices without a second request.
+  const wlSyms = getWL().map((w) => toYahoo(w.s));
+  const syms = [...new Set([...STOCK_UNIVERSE.map((s) => toYahoo(s.s)), ...wlSyms])];
+  const [movers, indices] = await Promise.all([P.getMovers(syms, { force }), loadIndices()]);
+  lastQuotes = new Map((movers && movers.quotes ? movers.quotes : []).map((q) => [q.symbol, q]));
   renderHome(movers, indices);
+  renderWatchlist(); // refresh with live prices now available
 }
+
+// NSE cash-market hours: Mon–Fri 09:15–15:30 IST. Purely client-side (a display badge).
+function marketStatus() {
+  try {
+    const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const day = ist.getDay(), mins = ist.getHours() * 60 + ist.getMinutes();
+    const open = day >= 1 && day <= 5 && mins >= 555 && mins <= 930;
+    return { open };
+  } catch (_) { return { open: false }; }
+}
+const volFmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 1 }));
 
 async function loadIndices() {
   const out = [];
@@ -604,21 +621,32 @@ async function loadIndices() {
 
 function computeScreens(quotes) {
   const bySym = new Map(STOCK_UNIVERSE.map((s) => [s.s, s]));
-  const rows = quotes.map((q) => {
+  // Screens are computed from the TRACKED universe only (watchlist-only symbols are
+  // fetched too, but excluded here so the screens stay "our tracked stocks").
+  const rows = quotes.filter((q) => bySym.has(q.symbol)).map((q) => {
     const u = bySym.get(q.symbol);
     return { ...q, name: (u && u.n) || q.name, sector: u && u.sector,
       value: q.price != null && q.volume != null ? q.price * q.volume : null,
-      volRatio: q.avgVolume > 0 && q.volume != null ? q.volume / q.avgVolume : null };
+      volRatio: q.avgVolume > 0 && q.volume != null ? q.volume / q.avgVolume : null,
+      pctFromHigh: q.high52 > 0 && q.price != null ? (q.price / q.high52 - 1) * 100 : null,
+      pctAboveLow: q.low52 > 0 && q.price != null ? (q.price / q.low52 - 1) * 100 : null };
   });
   const withPct = rows.filter((r) => r.changePct != null);
+  const adv = withPct.filter((r) => r.changePct > 0).length;
+  const dec = withPct.filter((r) => r.changePct < 0).length;
   const map = new Map();
   rows.forEach((r) => { if (!r.sector || r.changePct == null) return; const m = map.get(r.sector) || { sum: 0, n: 0 }; m.sum += r.changePct; m.n++; map.set(r.sector, m); });
   const sectors = [...map.entries()].map(([k, v]) => ({ sector: k, label: SECTORS[k] || k, avg: v.sum / v.n, n: v.n })).sort((a, b) => b.avg - a.avg);
   return {
+    breadth: { adv, dec, unch: withPct.length - adv - dec, total: withPct.length },
     gainers: [...withPct].sort((a, b) => b.changePct - a.changePct).slice(0, 6),
     losers: [...withPct].sort((a, b) => a.changePct - b.changePct).slice(0, 6),
     active: rows.filter((r) => r.value != null).sort((a, b) => b.value - a.value).slice(0, 6),
+    activeVol: rows.filter((r) => r.volume != null).sort((a, b) => b.volume - a.volume).slice(0, 6),
     shockers: rows.filter((r) => r.volRatio != null).sort((a, b) => b.volRatio - a.volRatio).slice(0, 6),
+    high52: rows.filter((r) => r.pctFromHigh != null).sort((a, b) => b.pctFromHigh - a.pctFromHigh).slice(0, 6),
+    low52: rows.filter((r) => r.pctAboveLow != null).sort((a, b) => a.pctAboveLow - b.pctAboveLow).slice(0, 6),
+    valuable: rows.filter((r) => r.marketCap > 0).sort((a, b) => b.marketCap - a.marketCap).slice(0, 6),
     sectors,
   };
 }
@@ -648,28 +676,52 @@ function renderHome(movers, indices) {
       </div>`;
     return;
   }
-  const N = movers.quotes.length;
+  const N = computeScreens.__n = movers.quotes.filter((q) => STOCK_UNIVERSE.some((u) => u.s === q.symbol)).length;
   const s = computeScreens(movers.quotes);
+  const mkt = marketStatus();
+  const b = s.breadth;
+  const advPct = b.total ? (b.adv / b.total) * 100 : 0;
   const idx = indices.map((i) => `<div class="idx"><span class="idx-nm">${i.nm}</span><span class="idx-px mono">${fmtNum(i.price)}</span><span class="idx-chg ${i.pct >= 0 ? 'pos' : 'neg'}">${fmtPct(i.pct)}</span></div>`).join('');
   const sectorChips = s.sectors.map((x) => `<span class="sector-chip ${x.avg >= 0 ? 'pos' : 'neg'}" title="${x.n} stocks">${x.label} <b>${fmtPct(x.avg)}</b></span>`).join('');
 
   host.innerHTML = `
     <div class="home-head">
-      <h2 class="home-title">Markets</h2>
+      <div class="home-title-row">
+        <h2 class="home-title">Markets</h2>
+        <span class="mkt-status ${mkt.open ? 'open' : 'closed'}"><span class="dot"></span>${mkt.open ? 'Market open' : 'Market closed'}</span>
+        <button class="icon-btn sm" id="homeRefresh" aria-label="Refresh market data" title="Refresh">${icon('refresh', 'ic')}</button>
+      </div>
       ${idx ? `<div class="indices-strip">${idx}</div>` : ''}
     </div>
-    ${s.sectors.length ? `<div class="card sector-card"><h3>${icon('activity', 'ic')} Trending sectors</h3><div class="sector-heat">${sectorChips}</div></div>` : ''}
-    <div class="home-grid">
-      <div class="card mv-card"><h3>${icon('trendUp', 'ic')} Top gainers</h3><div class="mv-list">${s.gainers.map((r) => moverRow(r)).join('')}</div></div>
-      <div class="card mv-card"><h3>${icon('trendDown', 'ic')} Top losers</h3><div class="mv-list">${s.losers.map((r) => moverRow(r)).join('')}</div></div>
-      <div class="card mv-card"><h3>${icon('activity', 'ic')} Most active <span class="muted small">by value</span></h3><div class="mv-list">${s.active.map((r) => moverRow(r, `<span class="mv-extra">${crFmt(r.value)}</span>`)).join('')}</div></div>
-      <div class="card mv-card"><h3>${icon('bolt', 'ic')} Volume shockers</h3><div class="mv-list">${s.shockers.map((r) => moverRow(r, `<span class="mv-extra">${fmtNum(r.volRatio, 1)}× avg</span>`)).join('')}</div></div>
-    </div>
-    <p class="home-note muted small">${icon('info', 'ic')} Movers are computed from the ${N} stocks this tool tracks (a curated cross-sector sample), not the entire market. Prices are delayed. Source: ${movers.source}${movers.cached ? ' · cached' : ''}, as of ${fmtDateTime(movers.asOf)}.</p>`;
 
-  host.querySelectorAll('.mv-row').forEach((b) => {
-    b.onclick = () => runAnalysis(b.dataset.s, { n: b.dataset.n, sector: b.dataset.sec || 'OTHER' });
+    <div class="card breadth-card">
+      <div class="breadth-head"><span>${icon('activity', 'ic')} Market breadth</span><span class="muted small">${b.adv} up · ${b.dec} down · ${b.unch} flat</span></div>
+      <div class="breadth-bar"><i class="adv" style="width:${advPct}%"></i><i class="dec" style="width:${100 - advPct}%"></i></div>
+    </div>
+
+    ${s.sectors.length ? `<div class="card sector-card"><h3>${icon('activity', 'ic')} Trending sectors</h3><div class="sector-heat">${sectorChips}</div></div>` : ''}
+
+    <div class="home-grid">
+      ${mvCard('trendUp', 'Top gainers', '', s.gainers, (r) => '')}
+      ${mvCard('trendDown', 'Top losers', '', s.losers, (r) => '')}
+      ${mvCard('activity', 'Most active', 'by value', s.active, (r) => `<span class="mv-extra">${crFmt(r.value)}</span>`)}
+      ${mvCard('barChart', 'Most active', 'by volume', s.activeVol, (r) => `<span class="mv-extra">${volFmt(r.volume)}</span>`)}
+      ${mvCard('bolt', 'Volume shockers', '', s.shockers, (r) => `<span class="mv-extra">${fmtNum(r.volRatio, 1)}× avg</span>`)}
+      ${mvCard('target', 'Most valuable', 'by m-cap', s.valuable, (r) => `<span class="mv-extra">${crFmt(r.marketCap)}</span>`)}
+      ${mvCard('trendUp', 'Near 52-wk high', '', s.high52, (r) => `<span class="mv-extra">${fmtNum(r.pctFromHigh, 1)}%</span>`)}
+      ${mvCard('trendDown', 'Near 52-wk low', '', s.low52, (r) => `<span class="mv-extra">+${fmtNum(r.pctAboveLow, 1)}%</span>`)}
+    </div>
+    <p class="home-note muted small">${icon('info', 'ic')} Screens are computed from the ${N} stocks this tool tracks (a curated cross-sector sample), not the entire market. Prices are delayed. Source: ${movers.source}${movers.cached ? ' · cached' : ''}, as of ${fmtDateTime(movers.asOf)}.</p>`;
+
+  const rf = $('#homeRefresh'); if (rf) rf.onclick = () => loadHome(true);
+  host.querySelectorAll('.mv-row').forEach((btn) => {
+    btn.onclick = () => runAnalysis(btn.dataset.s, { n: btn.dataset.n, sector: btn.dataset.sec || 'OTHER' });
   });
+}
+
+function mvCard(ic, title, sub, rows, extraFn) {
+  const body = rows.length ? rows.map((r) => moverRow(r, extraFn(r))).join('') : '<p class="muted small" style="padding:.6rem .2rem">No data.</p>';
+  return `<div class="card mv-card"><h3>${icon(ic, 'ic')} ${title}${sub ? ` <span class="muted small">${sub}</span>` : ''}</h3><div class="mv-list">${body}</div></div>`;
 }
 
 // ---------------- watchlist (localStorage, spec §27) ----------------
@@ -687,7 +739,11 @@ function renderWatchlist() {
   const host = $('#watchlist'); if (!host) return;
   const wl = getWL();
   if (!wl.length) { host.innerHTML = `<p class="muted small">Your watchlist is empty. Analyze a stock and tap ${icon('star', 'ic')} Watchlist to save it.</p>`; return; }
-  host.innerHTML = wl.map((x) => `<span class="wl-chip" data-s="${x.s}" role="button" tabindex="0"><b>${x.s}</b> <span class="muted">${x.n}</span> <span class="del" data-del="${x.s}" role="button" aria-label="Remove ${x.s}">${icon('close', 'ic')}</span></span>`).join('');
+  host.innerHTML = wl.map((x) => {
+    const q = lastQuotes.get(x.s);
+    const live = q && q.price != null ? `<span class="wl-px mono">${fmtPrice(q.price)}</span><span class="wl-chg ${q.changePct >= 0 ? 'pos' : 'neg'}">${fmtPct(q.changePct)}</span>` : '';
+    return `<span class="wl-chip" data-s="${escAttr(x.s)}" role="button" tabindex="0"><b>${x.s}</b> <span class="muted wl-nm">${x.n}</span> ${live} <span class="del" data-del="${escAttr(x.s)}" role="button" aria-label="Remove ${escAttr(x.s)}">${icon('close', 'ic')}</span></span>`;
+  }).join('');
   const open = (c) => { runAnalysis(c.dataset.s); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   host.querySelectorAll('.wl-chip').forEach((c) => {
     c.onclick = (e) => {

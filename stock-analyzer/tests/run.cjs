@@ -75,7 +75,7 @@ async function makeContext(browser, base, scenario = {}) {
   await ctx.route(/\/api\/movers/, (route) => {
     if (scenario.moversFail) return route.fulfill({ json: { available: false, reason: 'mock unavailable' } });
     const syms = (new URL(route.request().url()).searchParams.get('symbols') || '').split(',').filter(Boolean);
-    const quotes = syms.map((y, i) => { const pct = +(((i % 7) - 3) * 1.3 + (i % 3 ? 0.4 : -0.6)).toFixed(2); const price = 100 + i * 7; return { symbol: y.replace(/\.(NS|BO)$/i, ''), yahoo: y, name: y.replace(/\.(NS|BO)$/i, ''), price, change: +(price * pct / 100).toFixed(2), changePct: pct, volume: 1e6 * (1 + (i % 5)), avgVolume: 1e6 * (1 + ((i * 3) % 5)) }; });
+    const quotes = syms.map((y, i) => { const pct = +(((i % 7) - 3) * 1.3 + (i % 3 ? 0.4 : -0.6)).toFixed(2); const price = 100 + i * 7; return { symbol: y.replace(/\.(NS|BO)$/i, ''), yahoo: y, name: y.replace(/\.(NS|BO)$/i, ''), price, change: +(price * pct / 100).toFixed(2), changePct: pct, volume: 1e6 * (1 + (i % 5)), avgVolume: 1e6 * (1 + ((i * 3) % 5)), high52: price * (1 + (i % 4) * 0.05), low52: price * (0.6 + (i % 3) * 0.05), marketCap: 1e11 * (1 + (i % 9)) }; });
     route.fulfill({ json: { available: true, asOf: Date.now(), source: 'mock v7/quote', quotes } });
   });
   await ctx.route(/corsproxy\.io|allorigins\.win|thingproxy/, (r) => r.abort());
@@ -213,17 +213,27 @@ async function axeAudit(page, label) {
       const ctx = await makeContext(browser, base); const page = await ctx.newPage(); track(page);
       await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#home .home-grid', { timeout: 8000 });
-      check('home: four mover cards', (await page.$$('#home .mv-card')).length === 4);
+      check('home: eight mover cards (gainers/losers/active×2/shockers/valuable/52w×2)', (await page.$$('#home .mv-card')).length === 8);
       check('home: mover rows populated', (await page.$$('#home .mv-row')).length >= 8);
       check('home: sector heatmap rendered', (await page.$$('#home .sector-chip')).length >= 1);
       check('home: indices strip rendered', (await page.$$('#home .idx')).length >= 1);
+      check('home: market breadth bar rendered', (await page.$$('#home .breadth-bar .adv')).length === 1);
+      check('home: market status badge rendered', !!(await page.$('#home .mkt-status')));
+      check('home: refresh button present', !!(await page.$('#homeRefresh')));
+      // 52-week + most-valuable cards present by heading text
+      const headings = await page.$$eval('#home .mv-card h3', (ns) => ns.map((n) => n.textContent));
+      check('home: 52-week high & low screens', headings.some((h) => /52-wk high/.test(h)) && headings.some((h) => /52-wk low/.test(h)), headings.join(' | '));
+      check('home: most-valuable + most-active-by-volume screens', headings.some((h) => /Most valuable/.test(h)) && headings.filter((h) => /Most active/.test(h)).length === 2);
       await page.click('#home .mv-row');
       await page.waitForSelector('.verdict', { timeout: 8000 });
       check('home: clicking a mover opens analysis', !!(await page.$('.verdict')));
       check('home: hidden after selecting a stock', (await page.$eval('#home', (n) => getComputedStyle(n).display)) === 'none');
+      await page.click('#wlToggle'); await page.waitForTimeout(120); // save for live-watchlist check
       await page.click('.brand');
       await page.waitForSelector('#home .home-grid', { timeout: 8000 });
+      await page.waitForTimeout(300);
       check('home: brand click returns to markets', (await page.$eval('#home', (n) => getComputedStyle(n).display)) !== 'none');
+      check('home: watchlist shows live price', (await page.$$('#watchlist .wl-chip .wl-px')).length >= 1);
       await ctx.close();
     }
 

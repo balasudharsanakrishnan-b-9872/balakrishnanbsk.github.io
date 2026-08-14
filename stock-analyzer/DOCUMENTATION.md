@@ -305,7 +305,7 @@ All three live in `api/`, run on Vercel's Node runtime, only read public endpoin
 | `GET /api/history` | `symbol` (RELIANCE / 500325 / ^NSEI / RELIANCE.NS), `range`, `interval` | Yahoo v8/chart JSON (passthrough) |
 | `GET /api/quote` | `symbol` | `{available:true, valuation, profitability, growth, health, …}` or `{available:false, reason}` |
 | `GET /api/search` | `q` | `{ quotes: [...] }` (Yahoo symbol search passthrough) |
-| `GET /api/movers` | `symbols` (comma-separated `.NS`/`.BO` list) | `{available:true, quotes:[{symbol, price, changePct, volume, avgVolume, …}]}` or `{available:false, reason}` — the home page derives gainers/losers/most-active/shockers/sectors from this |
+| `GET /api/movers` | `symbols` (comma-separated `.NS`/`.BO` list) | `{available:true, quotes:[{symbol, price, changePct, volume, avgVolume, high52, low52, marketCap}]}` or `{available:false, reason}` — the home page derives gainers/losers/most-active(value&volume)/shockers/most-valuable/near-52w-high/low/sectors/breadth from this |
 
 `api/quote.js` performs Yahoo's cookie→crumb handshake; Yahoo changes this periodically,
 so it may return `available:false` — that's expected and handled.
@@ -346,7 +346,7 @@ Preserve these when editing (the test suite checks them):
 ```bash
 cd tests
 npm install     # Playwright + axe-core + Chart.js; downloads Chromium (postinstall)
-npm test        # 50 checks; non-zero exit on failure
+npm test        # 56 checks; non-zero exit on failure
 # or, with a pre-installed browser:
 PW_EXECUTABLE=/path/to/chrome npm test
 ```

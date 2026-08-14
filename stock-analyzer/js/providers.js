@@ -215,10 +215,9 @@ export async function searchSymbols(query) {
 // Batch quote for a universe, via /api/movers (server-side). Needs the backend — on
 // static hosting the crumb handshake can't run in a browser, so we return unavailable
 // rather than fabricate. Cached briefly to respect rate limits.
-export async function getMovers(yahooSymbols) {
+export async function getMovers(yahooSymbols, opts = {}) {
   const key = 'movers_' + (yahooSymbols.length);
-  const cached = cacheGet(key, 60 * 1000);
-  if (cached) return { ...cached, cached: true };
+  if (!opts.force) { const cached = cacheGet(key, 60 * 1000); if (cached) return { ...cached, cached: true }; }
   const local = await tryLocalApi(`/api/movers?symbols=${encodeURIComponent(yahooSymbols.join(','))}`);
   if (local && local.ok && local.json) {
     if (local.json.available) cacheSet(key, local.json);

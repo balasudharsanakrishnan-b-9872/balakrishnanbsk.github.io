@@ -33,6 +33,8 @@ export const ICON = {
   bolt: '<path d="M13 3 5 13h5l-1 8 8-11h-5z"/>',
   dot: '<circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none"/>',
   arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>',
 };
 
 // Return an <svg> string for an icon. `cls` sets a class; `size` overrides px size.
