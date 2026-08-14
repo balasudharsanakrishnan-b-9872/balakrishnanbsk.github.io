@@ -211,4 +211,20 @@ export async function searchSymbols(query) {
   return out;
 }
 
+// ---------- market movers (home page) ----------
+// Batch quote for a universe, via /api/movers (server-side). Needs the backend — on
+// static hosting the crumb handshake can't run in a browser, so we return unavailable
+// rather than fabricate. Cached briefly to respect rate limits.
+export async function getMovers(yahooSymbols) {
+  const key = 'movers_' + (yahooSymbols.length);
+  const cached = cacheGet(key, 60 * 1000);
+  if (cached) return { ...cached, cached: true };
+  const local = await tryLocalApi(`/api/movers?symbols=${encodeURIComponent(yahooSymbols.join(','))}`);
+  if (local && local.ok && local.json) {
+    if (local.json.available) cacheSet(key, local.json);
+    return local.json;
+  }
+  return { available: false, reason: 'Market movers need the /api/movers server function (available on the Vercel deployment). Not reachable from static hosting, so nothing is shown rather than fabricated.' };
+}
+
 export function relayNames() { return CORS_RELAYS.map((r) => hostOf(r('https://x/'))); }

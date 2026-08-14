@@ -125,7 +125,8 @@ stock-analyzer/
 ├── api/                # Vercel serverless functions (Node)
 │   ├── history.js      # proxy → Yahoo v8/chart
 │   ├── quote.js        # proxy → Yahoo quoteSummary (fundamentals; crumb handshake)
-│   └── search.js       # proxy → Yahoo symbol search (search by company name)
+│   ├── search.js       # proxy → Yahoo symbol search (search by company name)
+│   └── movers.js       # proxy → Yahoo v7/quote batch (home-page market movers)
 ├── tests/              # Playwright + axe-core suite (npm test) — NOT deployed
 ├── vercel.json         # Vercel config (clean URLs, function limits, CORS header)
 ├── .vercelignore       # keeps tests/ + node_modules out of the deploy
@@ -172,9 +173,13 @@ plus `round()` and `_selfTest()` (runs on load; logs to console).
 - `redFlags({...})` — price/volatility flags + the "not assessable" list.
 
 ### `js/app.js`
-Boot (`setupChrome` injects logo/icons/theme), `wireSearch` (debounced live search +
-ARIA), `wireTabs` (ARIA + keyboard), `runAnalysis` (the orchestrator), `renderAll` +
-`render*` panel builders, `gaugeSVG`, watchlist (localStorage), helpers. Also a guarded
+Boot (`setupChrome` injects logo/icons/theme, wires the brand→home click), `wireSearch`
+(debounced live search + ARIA), `wireTabs` (ARIA + keyboard), `runAnalysis` (the
+orchestrator, with a `loading` lock so a second analysis can't race the first),
+`renderAll` + `render*` panel builders, `gaugeSVG`, watchlist (localStorage), helpers.
+The **Markets home** lives here too: `loadHome` → `getMovers` + `loadIndices`,
+`computeScreens` (gainers / losers / most-active / volume-shockers / sector averages),
+`renderHome`, and `showHome`/`hideHome` toggling `#home` vs `#result`. Also a guarded
 `?e2e=1` test seam that exposes `renderAll`/`setCurrent`.
 
 ### `css/styles.css`, `js/icons.js`, `api/*` — see [§9](#9-design-system--theming) and [§8](#8-serverless-api-reference).
@@ -224,7 +229,11 @@ confidence  = max(20, round(dataQuality × 0.9))   # never overstates certainty
 { s: 'TATAPOWER', n: 'Tata Power', sector: 'ENERGY', industry: 'Power Utility' },
 ```
 `s` = NSE symbol, `sector` must be a key of `SECTORS`. (Reminder: users can already
-analyse *any* symbol by typing it — the shortlist is just convenience.)
+analyse *any* symbol by typing it — the shortlist is just convenience.) **`STOCK_UNIVERSE`
+is also the pool the Markets home page scans** for gainers/losers/most-active/shockers and
+sector trends, so adding names here widens the home dashboard too. To make the home page
+cover the whole market, replace this list with a fuller NSE symbol list (mind the
+`/api/movers` batch size — it caps at 150 symbols per call).
 
 ### Add a new sector
 `js/stocks.js` → add to `SECTORS` (e.g. `REALTY: 'Real Estate'`). Optionally add a
@@ -296,6 +305,7 @@ All three live in `api/`, run on Vercel's Node runtime, only read public endpoin
 | `GET /api/history` | `symbol` (RELIANCE / 500325 / ^NSEI / RELIANCE.NS), `range`, `interval` | Yahoo v8/chart JSON (passthrough) |
 | `GET /api/quote` | `symbol` | `{available:true, valuation, profitability, growth, health, …}` or `{available:false, reason}` |
 | `GET /api/search` | `q` | `{ quotes: [...] }` (Yahoo symbol search passthrough) |
+| `GET /api/movers` | `symbols` (comma-separated `.NS`/`.BO` list) | `{available:true, quotes:[{symbol, price, changePct, volume, avgVolume, …}]}` or `{available:false, reason}` — the home page derives gainers/losers/most-active/shockers/sectors from this |
 
 `api/quote.js` performs Yahoo's cookie→crumb handshake; Yahoo changes this periodically,
 so it may return `available:false` — that's expected and handled.
@@ -336,7 +346,7 @@ Preserve these when editing (the test suite checks them):
 ```bash
 cd tests
 npm install     # Playwright + axe-core + Chart.js; downloads Chromium (postinstall)
-npm test        # 42 checks; non-zero exit on failure
+npm test        # 50 checks; non-zero exit on failure
 # or, with a pre-installed browser:
 PW_EXECUTABLE=/path/to/chrome npm test
 ```

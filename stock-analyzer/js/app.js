@@ -1,7 +1,7 @@
 // app.js — orchestration + rendering. Ties providers -> analysis -> UI.
 // Keeps a clear separation: data in (providers), math (indicators/analysis), view (here).
 
-import { STOCK_UNIVERSE, SECTORS, BENCHMARK, SECTOR_INDEX, searchStocks } from './stocks.js';
+import { STOCK_UNIVERSE, SECTORS, BENCHMARK, SECTOR_INDEX, searchStocks, toYahoo } from './stocks.js';
 import * as P from './providers.js';
 import * as A from './analysis.js';
 import * as I from './indicators.js';
@@ -38,6 +38,7 @@ window.addEventListener('DOMContentLoaded', () => {
   wireQuickButtons();
   const params = new URLSearchParams(location.search);
   if (params.get('s')) runAnalysis(params.get('s').toUpperCase());
+  else loadHome();
 });
 
 // Inject brand logo, favicon, static icons, and wire the theme toggle.
@@ -50,6 +51,15 @@ function setupChrome() {
   set('#wlHeadIcon', icon('star', 'ic'));
   set('#introEyebrow', icon('bolt', 'ic') + ' Decision support, not predictions');
   const fav = $('#favicon'); if (fav) fav.setAttribute('href', faviconDataUri());
+
+  // clicking the brand returns to the Markets home
+  const brand = $('.brand');
+  if (brand) {
+    brand.setAttribute('role', 'button'); brand.setAttribute('tabindex', '0'); brand.setAttribute('aria-label', 'BSK Stock Analyser — home');
+    const goHome = () => { if (loading) return; showHome(); loadHome(); };
+    brand.onclick = goHome;
+    brand.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); } };
+  }
 
   const btn = $('#themeToggle');
   const apply = (mode) => {
@@ -227,6 +237,7 @@ async function fetchBenchmark() {
 
 // ---------------- rendering ----------------
 function showLoading(meta) {
+  hideHome();
   $('#result').style.display = 'block';
   $('#result').innerHTML = `<div class="loading"><div class="spinner"></div><p>Fetching live data for <b>${meta.s}</b> — ${meta.n}…</p><small class="muted">Live market data, fetched per-symbol. This can take a few seconds.</small></div>`;
 }
@@ -559,6 +570,106 @@ function drawCharts() {
   if ($('#chartPrice')) C.priceChart(CURRENT.bars, CHART_RANGE);
   if ($('#chartVolume')) C.volumeChart(CURRENT.bars, CHART_RANGE);
   if ($('#chartRsi')) C.rsiChart(CURRENT.bars, CHART_RANGE);
+}
+
+// ================= Markets home page =================
+function showHome() {
+  const h = $('#home'); if (h) h.style.display = 'block';
+  const r = $('#result'); if (r) { r.style.display = 'none'; r.innerHTML = ''; }
+  const s = $('#search'); if (s && !s.disabled) s.value = '';
+  history.replaceState(null, '', location.pathname);
+}
+function hideHome() { const h = $('#home'); if (h) h.style.display = 'none'; }
+
+async function loadHome() {
+  const host = $('#home'); if (!host) return;
+  showHome();
+  host.innerHTML = `<div class="loading"><div class="spinner"></div><p>Loading market movers…</p></div>`;
+  const syms = STOCK_UNIVERSE.map((s) => toYahoo(s.s));
+  const [movers, indices] = await Promise.all([P.getMovers(syms), loadIndices()]);
+  renderHome(movers, indices);
+}
+
+async function loadIndices() {
+  const out = [];
+  for (const [tk, nm] of [['%5ENSEI', 'NIFTY 50'], ['%5EBSESN', 'SENSEX']]) {
+    try {
+      const r = await P.getIndexHistory(tk, nm, '1mo');
+      const c = r.bars.at(-1).c, p = r.bars.at(-2).c;
+      if (c != null && p) out.push({ nm, price: c, pct: ((c - p) / p) * 100 });
+    } catch (_) {}
+  }
+  return out;
+}
+
+function computeScreens(quotes) {
+  const bySym = new Map(STOCK_UNIVERSE.map((s) => [s.s, s]));
+  const rows = quotes.map((q) => {
+    const u = bySym.get(q.symbol);
+    return { ...q, name: (u && u.n) || q.name, sector: u && u.sector,
+      value: q.price != null && q.volume != null ? q.price * q.volume : null,
+      volRatio: q.avgVolume > 0 && q.volume != null ? q.volume / q.avgVolume : null };
+  });
+  const withPct = rows.filter((r) => r.changePct != null);
+  const map = new Map();
+  rows.forEach((r) => { if (!r.sector || r.changePct == null) return; const m = map.get(r.sector) || { sum: 0, n: 0 }; m.sum += r.changePct; m.n++; map.set(r.sector, m); });
+  const sectors = [...map.entries()].map(([k, v]) => ({ sector: k, label: SECTORS[k] || k, avg: v.sum / v.n, n: v.n })).sort((a, b) => b.avg - a.avg);
+  return {
+    gainers: [...withPct].sort((a, b) => b.changePct - a.changePct).slice(0, 6),
+    losers: [...withPct].sort((a, b) => a.changePct - b.changePct).slice(0, 6),
+    active: rows.filter((r) => r.value != null).sort((a, b) => b.value - a.value).slice(0, 6),
+    shockers: rows.filter((r) => r.volRatio != null).sort((a, b) => b.volRatio - a.volRatio).slice(0, 6),
+    sectors,
+  };
+}
+
+const crFmt = (n) => (n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 2 }));
+const escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+function moverRow(r, extra) {
+  return `<button class="mv-row" data-s="${escAttr(r.symbol)}" data-n="${escAttr(r.name)}" data-sec="${escAttr(r.sector || '')}">
+    <span class="mv-sym">${r.symbol}</span>
+    <span class="mv-name">${r.name}</span>
+    ${extra || '<span class="mv-extra"></span>'}
+    <span class="mv-price">${fmtPrice(r.price)}</span>
+    <span class="mv-chg ${r.changePct >= 0 ? 'pos' : 'neg'}">${fmtPct(r.changePct)}</span>
+  </button>`;
+}
+
+function renderHome(movers, indices) {
+  const host = $('#home'); if (!host) return;
+  if (!movers || !movers.available) {
+    host.innerHTML = `
+      <div class="card unavailable home-unavailable">
+        <h3>${icon('barChart', 'ic')} Markets overview</h3>
+        <div class="na-banner">${icon('alert', 'ic')} Not available on this deployment</div>
+        <p>${movers ? movers.reason : 'Market movers could not be loaded.'}</p>
+        <p class="muted small">Deploy on Vercel (with the <code>/api/movers</code> function) to enable gainers, losers, most-active, volume shockers and sector trends. You can still search and analyse any stock from the box above.</p>
+      </div>`;
+    return;
+  }
+  const N = movers.quotes.length;
+  const s = computeScreens(movers.quotes);
+  const idx = indices.map((i) => `<div class="idx"><span class="idx-nm">${i.nm}</span><span class="idx-px mono">${fmtNum(i.price)}</span><span class="idx-chg ${i.pct >= 0 ? 'pos' : 'neg'}">${fmtPct(i.pct)}</span></div>`).join('');
+  const sectorChips = s.sectors.map((x) => `<span class="sector-chip ${x.avg >= 0 ? 'pos' : 'neg'}" title="${x.n} stocks">${x.label} <b>${fmtPct(x.avg)}</b></span>`).join('');
+
+  host.innerHTML = `
+    <div class="home-head">
+      <h2 class="home-title">Markets</h2>
+      ${idx ? `<div class="indices-strip">${idx}</div>` : ''}
+    </div>
+    ${s.sectors.length ? `<div class="card sector-card"><h3>${icon('activity', 'ic')} Trending sectors</h3><div class="sector-heat">${sectorChips}</div></div>` : ''}
+    <div class="home-grid">
+      <div class="card mv-card"><h3>${icon('trendUp', 'ic')} Top gainers</h3><div class="mv-list">${s.gainers.map((r) => moverRow(r)).join('')}</div></div>
+      <div class="card mv-card"><h3>${icon('trendDown', 'ic')} Top losers</h3><div class="mv-list">${s.losers.map((r) => moverRow(r)).join('')}</div></div>
+      <div class="card mv-card"><h3>${icon('activity', 'ic')} Most active <span class="muted small">by value</span></h3><div class="mv-list">${s.active.map((r) => moverRow(r, `<span class="mv-extra">${crFmt(r.value)}</span>`)).join('')}</div></div>
+      <div class="card mv-card"><h3>${icon('bolt', 'ic')} Volume shockers</h3><div class="mv-list">${s.shockers.map((r) => moverRow(r, `<span class="mv-extra">${fmtNum(r.volRatio, 1)}× avg</span>`)).join('')}</div></div>
+    </div>
+    <p class="home-note muted small">${icon('info', 'ic')} Movers are computed from the ${N} stocks this tool tracks (a curated cross-sector sample), not the entire market. Prices are delayed. Source: ${movers.source}${movers.cached ? ' · cached' : ''}, as of ${fmtDateTime(movers.asOf)}.</p>`;
+
+  host.querySelectorAll('.mv-row').forEach((b) => {
+    b.onclick = () => runAnalysis(b.dataset.s, { n: b.dataset.n, sector: b.dataset.sec || 'OTHER' });
+  });
 }
 
 // ---------------- watchlist (localStorage, spec §27) ----------------

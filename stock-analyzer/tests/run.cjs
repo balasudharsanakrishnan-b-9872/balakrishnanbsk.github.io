@@ -72,6 +72,12 @@ async function makeContext(browser, base, scenario = {}) {
     ? route.fulfill({ json: { available: false, reason: 'mock unavailable' } })
     : route.fulfill({ json: FUND(new URL(route.request().url()).searchParams.get('symbol') || '') }));
   await ctx.route(/\/api\/search/, (route) => route.fulfill({ json: SEARCH }));
+  await ctx.route(/\/api\/movers/, (route) => {
+    if (scenario.moversFail) return route.fulfill({ json: { available: false, reason: 'mock unavailable' } });
+    const syms = (new URL(route.request().url()).searchParams.get('symbols') || '').split(',').filter(Boolean);
+    const quotes = syms.map((y, i) => { const pct = +(((i % 7) - 3) * 1.3 + (i % 3 ? 0.4 : -0.6)).toFixed(2); const price = 100 + i * 7; return { symbol: y.replace(/\.(NS|BO)$/i, ''), yahoo: y, name: y.replace(/\.(NS|BO)$/i, ''), price, change: +(price * pct / 100).toFixed(2), changePct: pct, volume: 1e6 * (1 + (i % 5)), avgVolume: 1e6 * (1 + ((i * 3) % 5)) }; });
+    route.fulfill({ json: { available: true, asOf: Date.now(), source: 'mock v7/quote', quotes } });
+  });
   await ctx.route(/corsproxy\.io|allorigins\.win|thingproxy/, (r) => r.abort());
   return ctx;
 }
@@ -199,6 +205,34 @@ async function axeAudit(page, label) {
       await page.waitForSelector('.verdict', { timeout: 8000 }); await page.waitForTimeout(300);
       check('no-fund: fundamentals unavailable (not fabricated)', /Not available|unavailable/i.test(await page.$eval('#panel-fundamentals', (n) => n.innerHTML)));
       check('no-fund: data quality reduced', /[1-6]\d%|20%/.test(await page.$eval('.verdict-boxes', (n) => n.textContent)));
+      await ctx.close();
+    }
+
+    // ===== Scenario F: Markets home page =====
+    {
+      const ctx = await makeContext(browser, base); const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#home .home-grid', { timeout: 8000 });
+      check('home: four mover cards', (await page.$$('#home .mv-card')).length === 4);
+      check('home: mover rows populated', (await page.$$('#home .mv-row')).length >= 8);
+      check('home: sector heatmap rendered', (await page.$$('#home .sector-chip')).length >= 1);
+      check('home: indices strip rendered', (await page.$$('#home .idx')).length >= 1);
+      await page.click('#home .mv-row');
+      await page.waitForSelector('.verdict', { timeout: 8000 });
+      check('home: clicking a mover opens analysis', !!(await page.$('.verdict')));
+      check('home: hidden after selecting a stock', (await page.$eval('#home', (n) => getComputedStyle(n).display)) === 'none');
+      await page.click('.brand');
+      await page.waitForSelector('#home .home-grid', { timeout: 8000 });
+      check('home: brand click returns to markets', (await page.$eval('#home', (n) => getComputedStyle(n).display)) !== 'none');
+      await ctx.close();
+    }
+
+    // ===== Scenario G: home unavailable (no backend) =====
+    {
+      const ctx = await makeContext(browser, base, { moversFail: true }); const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#home .home-unavailable', { timeout: 8000 });
+      check('home: honest unavailable state when backend missing', /Not available/i.test(await page.$eval('#home', (n) => n.textContent)));
       await ctx.close();
     }
 
