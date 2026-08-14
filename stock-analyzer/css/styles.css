@@ -61,6 +61,11 @@ code { background: #0b1220; padding: 1px 5px; border-radius: 4px; font-size: .85
 .suggestion em { color: var(--text-dim); font-size: .78rem; font-style: normal; }
 .suggestion.direct { border-top: 1px dashed var(--border); }
 .suggestion.direct b { color: var(--accent-2); }
+.suggestion.note { cursor: default; padding: .45rem .9rem; font-size: .76rem; }
+.suggestion.note:hover { background: transparent; }
+.suggestion .exch { font-style: normal; font-size: .66rem; font-weight: 600; padding: .05rem .4rem; border-radius: 5px; letter-spacing: .03em; }
+.suggestion .exch.nse { background: rgba(56,189,248,.15); color: var(--accent); }
+.suggestion .exch.bse { background: rgba(234,179,8,.15); color: var(--warn); }
 
 /* ---------- layout ---------- */
 main { max-width: 1080px; margin: 0 auto; padding: 1.4rem; }

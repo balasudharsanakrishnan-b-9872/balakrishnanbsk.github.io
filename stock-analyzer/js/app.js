@@ -39,35 +39,49 @@ function wireQuickButtons() {
 function wireSearch() {
   const input = $('#search');
   const box = $('#suggestions');
-  const renderSuggestions = () => {
-    const q = input.value.trim();
-    box.innerHTML = '';
-    if (!q) { box.style.display = 'none'; return; }
-    const results = searchStocks(q);
-    results.forEach((st) => {
-      const item = el('div', 'suggestion', `<b>${st.s}</b> <span>${st.n}</span><em>${SECTORS[st.sector]}</em>`);
-      item.onclick = () => { input.value = st.s; box.style.display = 'none'; runAnalysis(st.s); };
-      box.appendChild(item);
-    });
-    // Always offer a "analyze directly" row so ANY NSE symbol or BSE code works,
-    // not just the curated shortlist. Data is fetched live per-symbol.
-    const up = q.toUpperCase();
-    if (!results.some((r) => r.s === up)) {
-      const kind = /^\d+$/.test(up) ? 'BSE scrip code' : 'NSE symbol (BSE fallback)';
-      const direct = el('div', 'suggestion direct', `<b>${up}</b> <span>Analyze this symbol directly</span><em>${kind}</em>`);
-      direct.onclick = () => { box.style.display = 'none'; runAnalysis(up); };
-      box.appendChild(direct);
-    }
-    box.style.display = 'block';
+  let seq = 0, timer = null;
+
+  const row = (it) => {
+    const badge = it.exch ? `<em class="exch ${it.exch.toLowerCase()}">${it.exch}</em>` : '';
+    const item = el('div', 'suggestion', `<b>${it.s}</b> <span>${it.n}</span>${badge}`);
+    item.onclick = () => { input.value = it.s; box.style.display = 'none'; runAnalysis(it.query || it.s, { n: it.n, sector: it.sector, industry: it.industry }); };
+    return item;
   };
-  input.addEventListener('input', renderSuggestions);
+  const paint = (items, note) => {
+    box.innerHTML = '';
+    if (note) box.appendChild(el('div', 'suggestion note', `<span class="muted">${note}</span>`));
+    items.forEach((it) => box.appendChild(row(it)));
+    box.style.display = items.length || note ? 'block' : 'none';
+  };
+
+  const doSearch = async () => {
+    const q = input.value.trim();
+    if (!q) { box.style.display = 'none'; return; }
+    // 1) instant local shortlist
+    const local = searchStocks(q).map((st) => ({ s: st.s, n: st.n, exch: 'NSE', sector: st.sector, industry: st.industry, query: st.s }));
+    paint(local, 'Searching all NSE / BSE listings…');
+    // 2) live directory search (debounced; ignore stale responses)
+    const mySeq = ++seq;
+    const live = await P.searchSymbols(q);
+    if (mySeq !== seq) return;
+    const merged = [...local];
+    live.forEach((r) => { if (!merged.some((m) => (m.query || m.s) === r.yahoo)) merged.push({ s: r.s, n: r.name, exch: r.exch, query: r.yahoo }); });
+    if (!merged.length) {
+      const up = q.toUpperCase();
+      paint([{ s: up, n: 'Analyze this symbol directly', exch: /^\d+$/.test(up) ? 'BSE' : 'NSE', query: up }], 'No name match — try the raw symbol/code:');
+    } else {
+      paint(merged.slice(0, 12), null);
+    }
+  };
+
+  input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(doSearch, 250); });
   input.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
-    const q = input.value.trim().toUpperCase();
+    const q = input.value.trim();
     if (!q) return;
     box.style.display = 'none';
     const r = searchStocks(q);
-    runAnalysis(r[0] ? r[0].s : q); // known name if matched, else analyze the raw symbol/code
+    runAnalysis(r[0] ? r[0].s : q.toUpperCase()); // known name if matched, else analyze the raw symbol/code
   });
   document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrap')) box.style.display = 'none'; });
 }
@@ -88,8 +102,10 @@ function wireTabs() {
 }
 
 // ---------------- main flow ----------------
-async function runAnalysis(symbol) {
-  const meta = STOCK_UNIVERSE.find((s) => s.s === symbol) || { s: symbol, n: symbol, sector: 'OTHER', industry: '—' };
+async function runAnalysis(symbol, override) {
+  const meta =
+    STOCK_UNIVERSE.find((s) => s.s === symbol) ||
+    { s: symbol, n: (override && override.n) || symbol, sector: (override && override.sector) || 'OTHER', industry: (override && override.industry) || '—' };
   showLoading(meta);
   try {
     // fetch stock history, benchmark, and the (honestly unavailable) providers in parallel

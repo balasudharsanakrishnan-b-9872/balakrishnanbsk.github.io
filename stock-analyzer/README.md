@@ -46,10 +46,11 @@ as **unavailable** rather than being invented.
 The app is built to be honest about what it can and can't know.
 
 ### What works on Vercel (with the `/api` functions)
-- **Search / analyze any listed stock** — a curated shortlist powers autocomplete, but you
-  can analyze **any NSE symbol** (typed directly) or **any BSE scrip code** (numeric, e.g.
-  `500325`). Data is fetched live per-symbol; NSE is tried first with an automatic BSE
-  fallback, so you are not limited to the shortlist.
+- **Search by company name** (live) — type "reliance", "hdfc", "infosys" and pick from real
+  listed matches via `/api/search` (Yahoo symbol directory), each tagged **NSE** or **BSE**
+  so same-name dual listings are disambiguated by what you click. You can still type an exact
+  NSE symbol or BSE scrip code (`500325`) directly; NSE is tried first with an automatic BSE
+  fallback. No memorizing or copy-pasting codes.
 - **Live price & volume history** via `/api/history` (Yahoo Finance, delayed).
 - **Technical analysis** — SMA 20/50/100/200, EMA 20/50, RSI 14, MACD, Bollinger, ATR,
   ADX, volume signals, 52-week high/low, golden/death cross.

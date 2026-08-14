@@ -175,4 +175,40 @@ export async function getOwnership() {
   return { available: false, reason: 'Shareholding-pattern (promoter/FII/DII) data comes from NSE/BSE filings that need a backend. No holdings are invented.' };
 }
 
+// ---------- live symbol search (by company name or partial symbol) ----------
+// Returns Indian (NSE/BSE) equity/ETF matches: { yahoo, s, name, exch }. Empty on failure
+// (the UI still falls back to the local shortlist) — never invents tickers.
+export async function searchSymbols(query) {
+  const q = String(query || '').trim();
+  if (q.length < 2) return [];
+  let quotes = [];
+  try {
+    const local = await tryLocalApi(`/api/search?q=${encodeURIComponent(q)}`);
+    if (local && local.ok && Array.isArray(local.json?.quotes)) quotes = local.json.quotes;
+    else {
+      const { json } = await fetchJSONviaRelays(
+        `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=15&newsCount=0&enableFuzzyQuery=true`,
+      );
+      quotes = json?.quotes || [];
+    }
+  } catch (_) { return []; }
+
+  const out = [];
+  const seen = new Set();
+  for (const it of quotes) {
+    const sym = String(it.symbol || '');
+    if (!/\.(NS|BO)$/i.test(sym)) continue; // India only (NSE .NS / BSE .BO)
+    if (it.quoteType && !['EQUITY', 'ETF'].includes(it.quoteType)) continue;
+    if (seen.has(sym)) continue;
+    seen.add(sym);
+    out.push({
+      yahoo: sym,
+      s: sym.replace(/\.(NS|BO)$/i, ''),
+      name: it.longname || it.shortname || sym,
+      exch: /\.BO$/i.test(sym) ? 'BSE' : 'NSE',
+    });
+  }
+  return out;
+}
+
 export function relayNames() { return CORS_RELAYS.map((r) => hostOf(r('https://x/'))); }
