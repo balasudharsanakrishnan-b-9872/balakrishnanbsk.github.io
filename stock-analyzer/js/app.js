@@ -740,7 +740,7 @@ function renderWatchlist() {
   const wl = getWL();
   if (!wl.length) { host.innerHTML = `<p class="muted small">Your watchlist is empty. Analyze a stock and tap ${icon('star', 'ic')} Watchlist to save it.</p>`; return; }
   host.innerHTML = wl.map((x) => {
-    const q = lastQuotes.get(x.s);
+    const q = lastQuotes.get(x.s) || lastQuotes.get(String(x.s).replace(/\.(NS|BO)$/i, ''));
     const live = q && q.price != null ? `<span class="wl-px mono">${fmtPrice(q.price)}</span><span class="wl-chg ${q.changePct >= 0 ? 'pos' : 'neg'}">${fmtPct(q.changePct)}</span>` : '';
     return `<span class="wl-chip" data-s="${escAttr(x.s)}" role="button" tabindex="0"><b>${x.s}</b> <span class="muted wl-nm">${x.n}</span> ${live} <span class="del" data-del="${escAttr(x.s)}" role="button" aria-label="Remove ${escAttr(x.s)}">${icon('close', 'ic')}</span></span>`;
   }).join('');
