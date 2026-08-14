@@ -150,6 +150,12 @@ python3 -m http.server 8000
 ```
 Open the browser console to see the indicator self-test on load.
 
+## Documentation
+
+Full maintainer & developer guide — architecture, a file-by-file reference, the scoring
+engine, and step-by-step "how to change X" recipes — is in
+**[DOCUMENTATION.md](DOCUMENTATION.md)**. Read that before making changes.
+
 ## Tests
 
 A functional + accessibility suite lives in [`tests/`](tests/). It runs **offline** —
