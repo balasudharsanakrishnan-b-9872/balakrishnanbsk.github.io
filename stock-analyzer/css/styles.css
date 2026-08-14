@@ -132,6 +132,8 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 }
 #search::placeholder { color: var(--faint); }
 #search:focus { border-color: var(--brand); box-shadow: 0 0 0 4px var(--ring); background: var(--surface); }
+#search:disabled { opacity: .6; cursor: wait; }
+.mini-spin { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-2); border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite; }
 .suggestions {
   display: none; position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 70;
   background: var(--surface); border: 1px solid var(--border-2); border-radius: 14px;

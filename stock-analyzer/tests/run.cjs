@@ -61,7 +61,8 @@ async function makeContext(browser, base, scenario = {}) {
   await ctx.route(/cdn\.jsdelivr\.net\/.*chart\.umd\.min\.js/, (r) => r.fulfill({ contentType: 'application/javascript', body: CHARTJS }));
   await ctx.route(/fonts\.googleapis\.com/, (r) => r.fulfill({ contentType: 'text/css', body: '' }));
   await ctx.route(/fonts\.gstatic\.com/, (r) => r.abort());
-  await ctx.route(/\/api\/history/, (route) => {
+  await ctx.route(/\/api\/history/, async (route) => {
+    if (scenario.slowMs) await new Promise((r) => setTimeout(r, scenario.slowMs)); // simulate slow load
     const sym = new URL(route.request().url()).searchParams.get('symbol') || '';
     if (scenario.histFail) return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"mock fail"}' });
     if (scenario.bseOnly && /\.NS$/i.test(sym)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"not found"}' });
@@ -198,6 +199,20 @@ async function axeAudit(page, label) {
       await page.waitForSelector('.verdict', { timeout: 8000 }); await page.waitForTimeout(300);
       check('no-fund: fundamentals unavailable (not fabricated)', /Not available|unavailable/i.test(await page.$eval('#panel-fundamentals', (n) => n.innerHTML)));
       check('no-fund: data quality reduced', /[1-6]\d%|20%/.test(await page.$eval('.verdict-boxes', (n) => n.textContent)));
+      await ctx.close();
+    }
+
+    // ===== Scenario E: loading lock (no concurrent analyses / no race) =====
+    {
+      const ctx = await makeContext(browser, base, { slowMs: 1200 }); const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html?s=RELIANCE', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => document.querySelector('#search') && document.querySelector('#search').disabled === true, { timeout: 4000 }).catch(() => {});
+      check('loading lock: search disabled during load', await page.$eval('#search', (n) => n.disabled));
+      // try to start a different analysis mid-load — the guard must ignore it
+      await page.click('.quick-btn[data-s="INFY"]').catch(() => {});
+      await page.waitForSelector('.verdict', { timeout: 10000 }); await page.waitForTimeout(200);
+      check('loading lock: second request ignored (no race)', /RELIANCE/.test(await page.$eval('.verdict-id .sym', (n) => n.textContent)));
+      check('loading lock: search re-enabled after load', (await page.$eval('#search', (n) => n.disabled)) === false);
       await ctx.close();
     }
 

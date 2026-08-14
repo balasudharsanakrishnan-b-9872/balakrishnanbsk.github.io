@@ -17,6 +17,7 @@ const fmtDateTime = (ms) => (ms ? new Date(ms).toLocaleString('en-IN', { dateSty
 
 let CURRENT = null; // last analysis result
 let CHART_RANGE = '1Y';
+let loading = false; // true while an analysis is in flight — blocks new requests
 
 // Testing seam: with ?e2e=1 expose render internals so an automated harness can render
 // a fixture offline (it exposes no data of its own — the caller supplies everything).
@@ -98,6 +99,7 @@ function wireSearch() {
   };
 
   const doSearch = async () => {
+    if (loading) { close(); return; } // don't surface results while an analysis is loading
     const q = input.value.trim();
     if (!q) { close(); return; }
     // 1) instant local shortlist
@@ -161,6 +163,9 @@ function wireTabs() {
 
 // ---------------- main flow ----------------
 async function runAnalysis(symbol, override) {
+  if (loading) return; // one analysis at a time — ignore clicks/search until it finishes
+  loading = true;
+  setSearchBusy(true);
   const meta =
     STOCK_UNIVERSE.find((s) => s.s === symbol) ||
     { s: symbol, n: (override && override.n) || symbol, sector: (override && override.sector) || 'OTHER', industry: (override && override.industry) || '—' };
@@ -196,7 +201,22 @@ async function runAnalysis(symbol, override) {
     renderAll(CURRENT);
   } catch (e) {
     showError(meta, e);
+  } finally {
+    loading = false;
+    setSearchBusy(false);
   }
+}
+
+// Lock the search box while an analysis loads, so a second stock can't be started
+// mid-load (which would race the first). Swaps the search glyph for a spinner.
+function setSearchBusy(busy) {
+  const input = $('#search');
+  if (input) { input.disabled = busy; input.setAttribute('aria-busy', busy ? 'true' : 'false'); }
+  const box = $('#suggestions');
+  if (box && busy) { box.innerHTML = ''; box.style.display = 'none'; input && input.setAttribute('aria-expanded', 'false'); }
+  const icon0 = $('#searchIcon');
+  if (icon0) icon0.innerHTML = busy ? '<span class="mini-spin" aria-hidden="true"></span>' : icon('search', 'ic');
+  document.body.classList.toggle('is-loading', busy);
 }
 
 async function fetchBenchmark() {

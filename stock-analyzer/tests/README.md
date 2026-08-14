@@ -22,7 +22,7 @@ PW_EXECUTABLE=/path/to/chrome npm test
 
 `npm test` exits non-zero if any check fails, so it works in CI.
 
-## What it covers (37 checks)
+## What it covers (42 checks)
 
 - **Search** — live dropdown, NSE/BSE dual-listing disambiguation, combobox ARIA
 - **Verdict** — score gauge, rating, ₹ price, stat tiles, data-quality
