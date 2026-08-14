@@ -1,6 +1,6 @@
-# ArthaScope — Indian Equity Intelligence
+# BSK Stock Analyser — Indian Equity Intelligence
 
-**ArthaScope** is a **data-driven Indian (NSE & BSE) equity research & investment
+**BSK Stock Analyser** is a **data-driven Indian (NSE & BSE) equity research & investment
 decision-support tool** — not a "stock prediction" gimmick.
 
 The UI is a bespoke design system (custom logo + hand-built SVG icon set, no emoji;

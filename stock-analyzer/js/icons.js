@@ -46,7 +46,7 @@ export function icon(name, cls = 'ic', size) {
 // `id` keeps gradient ids unique if the mark is embedded more than once.
 export function logoMark(px = 34, id = 'lg') {
   return `
-<svg width="${px}" height="${px}" viewBox="0 0 40 40" fill="none" role="img" aria-label="ArthaScope logo">
+<svg width="${px}" height="${px}" viewBox="0 0 40 40" fill="none" role="img" aria-label="BSK Stock Analyser logo">
   <defs>
     <linearGradient id="${id}-a" x1="6" y1="34" x2="34" y2="6" gradientUnits="userSpaceOnUse">
       <stop stop-color="#12b886"/><stop offset="1" stop-color="#4ff0be"/>
