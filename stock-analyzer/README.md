@@ -1,7 +1,14 @@
-# Indian Equity Analyzer
+# ArthaScope — Indian Equity Intelligence
 
-A **data-driven Indian (NSE) equity research & investment decision-support tool** — not a
-"stock prediction" gimmick. It fetches live price history **and fundamentals**, computes
+**ArthaScope** is a **data-driven Indian (NSE & BSE) equity research & investment
+decision-support tool** — not a "stock prediction" gimmick.
+
+The UI is a bespoke design system (custom logo + hand-built SVG icon set, no emoji;
+Sora / Inter / JetBrains Mono type; emerald-on-carbon palette with a gold signal accent),
+with **light & dark themes**, a **circular score gauge**, and full **keyboard + screen-reader
+accessibility** (ARIA tabs/combobox, skip link, reduced-motion support). Verified with an
+automated Playwright + axe-core audit: **0 accessibility violations** across landing and
+dashboard in both themes, responsive at 375 / 768 / 1280 px. It fetches live price history **and fundamentals**, computes
 technical / trend / risk / valuation metrics deterministically, and produces a
 **transparent, weighted score** with an explicit decision, confidence and data-quality
 reading.
@@ -94,15 +101,17 @@ being fabricated.
 stock-analyzer/
 ├── index.html · css/styles.css        static frontend (no build step)
 ├── js/
-│   ├── stocks.js       search universe, sector map, Yahoo ticker mapping
+│   ├── stocks.js       search universe, sector map, NSE/BSE ticker resolution
 │   ├── providers.js    provider layer: tries /api first, falls back to CORS relays + cache
 │   ├── indicators.js   deterministic math (+ self-test)
 │   ├── analysis.js     technical/trend/risk + fundamental scorers + decision + red flags
 │   ├── charts.js       Chart.js wrappers
-│   └── app.js          orchestration + rendering + watchlist
+│   ├── icons.js        hand-built SVG icon set + brand logo mark + favicon
+│   └── app.js          orchestration + rendering + theming + a11y + watchlist
 ├── api/                Vercel serverless functions (Node)
 │   ├── history.js      server proxy → Yahoo v8/chart (kills the CORS-relay dependency)
-│   └── quote.js        server proxy → Yahoo quoteSummary (fundamentals, crumb handshake)
+│   ├── quote.js        server proxy → Yahoo quoteSummary (fundamentals, crumb handshake)
+│   └── search.js       server proxy → Yahoo symbol search (search by company name)
 └── vercel.json
 ```
 

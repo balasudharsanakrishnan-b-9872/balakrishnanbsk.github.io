@@ -18,10 +18,10 @@ function baseOpts(extra = {}) {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
-    plugins: { legend: { labels: { color: css('--text-dim'), boxWidth: 12, font: { size: 11 } } } },
+    plugins: { legend: { labels: { color: css('--dim'), boxWidth: 12, font: { size: 11 } } } },
     scales: {
-      x: { ticks: { color: css('--text-dim'), maxTicksLimit: 8, font: { size: 10 } }, grid: { color: GRID } },
-      y: { ticks: { color: css('--text-dim'), font: { size: 10 } }, grid: { color: GRID } },
+      x: { ticks: { color: css('--dim'), maxTicksLimit: 8, font: { size: 10 } }, grid: { color: GRID } },
+      y: { ticks: { color: css('--dim'), font: { size: 10 } }, grid: { color: GRID } },
     },
     ...extra,
   };
@@ -49,7 +49,7 @@ export function priceChart(bars, range = '1Y') {
     data: {
       labels,
       datasets: [
-        { label: 'Price', data: closes, borderColor: css('--accent'), borderWidth: 1.6, pointRadius: 0, tension: 0.1 },
+        { label: 'Price', data: closes, borderColor: css('--brand'), borderWidth: 1.6, pointRadius: 0, tension: 0.1 },
         { label: 'SMA 50', data: smaLine(closes, 50), borderColor: '#f59e0b', borderWidth: 1, pointRadius: 0, borderDash: [4, 3] },
         { label: 'SMA 200', data: smaLine(closes, 200), borderColor: '#ef4444', borderWidth: 1, pointRadius: 0, borderDash: [4, 3] },
       ],
@@ -87,7 +87,7 @@ export function rsiChart(bars, range = '1Y') {
       labels: b.map((x) => new Date(x.t).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })),
       datasets: [{ label: 'RSI 14', data: rsis, borderColor: '#a78bfa', borderWidth: 1.4, pointRadius: 0 }],
     },
-    options: baseOpts({ scales: { y: { min: 0, max: 100, ticks: { color: css('--text-dim'), stepSize: 25 }, grid: { color: GRID } }, x: { ticks: { color: css('--text-dim'), maxTicksLimit: 8 }, grid: { color: GRID } } } }),
+    options: baseOpts({ scales: { y: { min: 0, max: 100, ticks: { color: css('--dim'), stepSize: 25 }, grid: { color: GRID } }, x: { ticks: { color: css('--dim'), maxTicksLimit: 8 }, grid: { color: GRID } } } }),
   });
 }
 
@@ -102,7 +102,7 @@ export function scoreGauge(canvasId, breakdown) {
         backgroundColor: breakdown.map((b) => (b.score == null ? '#475569' : b.score >= 60 ? '#22c55e' : b.score >= 45 ? '#eab308' : '#ef4444')),
       }],
     },
-    options: baseOpts({ indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100, ticks: { color: css('--text-dim') }, grid: { color: GRID } }, y: { ticks: { color: css('--text-dim'), font: { size: 10 } }, grid: { display: false } } } }),
+    options: baseOpts({ indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { min: 0, max: 100, ticks: { color: css('--dim') }, grid: { color: GRID } }, y: { ticks: { color: css('--dim'), font: { size: 10 } }, grid: { display: false } } } }),
   });
 }
 

@@ -3,31 +3,48 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Indian Equity Analyzer</title>
-  <meta name="description" content="Data-driven Indian (NSE) equity research & investment decision-support. Transparent scoring, no fabricated data." />
+  <title>ArthaScope — Indian Equity Intelligence</title>
+  <meta name="description" content="ArthaScope — data-driven NSE & BSE equity research and investment decision support. Transparent scoring, no fabricated data." />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#0f9e77" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#070b0a" media="(prefers-color-scheme: dark)" />
+  <!-- set theme before paint to avoid a flash -->
+  <script>
+    (function () { try { var t = localStorage.getItem('sa_theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {} })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
-  <!-- Chart.js via CDN (allowed on GitHub Pages; pinned major version) -->
+  <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='11' fill='%230b1210'/%3E%3C/svg%3E" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
+  <a class="skip" href="#result">Skip to results</a>
+
   <header class="topbar">
     <div class="brand">
-      <span class="logo">📊</span>
+      <span class="mark" id="logoMark" aria-hidden="true"></span>
       <div>
-        <h1>Indian Equity Analyzer</h1>
-        <p>Data-driven NSE equity research &amp; investment decision support</p>
+        <h1>Artha<span class="accent">Scope</span></h1>
+        <p>NSE · BSE Equity Intelligence</p>
       </div>
     </div>
     <div class="search-wrap">
-      <input id="search" type="text" placeholder="Search by name or symbol — Reliance, HDFC, Infosys, TCS…" autocomplete="off" spellcheck="false" />
-      <div id="suggestions" class="suggestions"></div>
+      <div class="search-inner">
+        <span class="ic" id="searchIcon" aria-hidden="true"></span>
+        <input id="search" type="text" role="combobox" aria-expanded="false" aria-controls="suggestions" aria-autocomplete="list" aria-label="Search stocks by name or symbol" placeholder="Search by name or symbol — Reliance, HDFC, Infosys, TCS…" autocomplete="off" spellcheck="false" />
+      </div>
+      <div id="suggestions" class="suggestions" role="listbox" aria-label="Search results"></div>
     </div>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle light / dark theme" title="Toggle theme"></button>
   </header>
 
   <main>
     <section id="intro" class="intro">
-      <h2>Analyze any NSE or BSE listed stock</h2>
-      <p>Type <b>any NSE symbol</b> (e.g. <code>RELIANCE</code>, <code>INFY</code>) or a <b>BSE scrip code</b> (e.g. <code>500325</code>) — the autocomplete shortlist is just a convenience; you are not limited to it. The tool fetches <b>live price history</b> per symbol (NSE first, BSE fallback), computes technical / trend / risk metrics deterministically, and produces a <b>transparent weighted score</b> with an explicit decision, confidence and data-quality reading.</p>
+      <span class="eyebrow" id="introEyebrow">Decision support, not predictions</span>
+      <h2>Analyze any <span class="accent">NSE or BSE</span> listed stock</h2>
+      <p>Search by company name and pick from live matches — no symbols to memorize. ArthaScope fetches <b>live price history</b> and <b>fundamentals</b>, computes every metric deterministically, and returns a <b>transparent, weighted score</b> with an explicit decision, confidence and data-quality reading.</p>
       <div class="quick">
         <span>Try:</span>
         <button class="quick-btn" data-s="RELIANCE">RELIANCE</button>
@@ -38,58 +55,59 @@
         <button class="quick-btn" data-s="ITC">ITC</button>
       </div>
       <div class="notice">
-        <b>Honest scope.</b> On the <b>Vercel</b> deployment, serverless functions proxy Yahoo Finance server-side, so this covers <b>price/volume history</b> → technicals, trend, returns, volatility, beta, relative strength, <b>plus fundamentals</b> (P/E, P/B, ROE, margins, debt, cash flow, growth) feeding a transparent score. Data is <b>delayed</b>, never real-time, and always timestamped. Ownership, news &amp; backtesting need further data integrations and are shown as <b>unavailable</b> rather than invented. (On static hosting without the <code>/api</code> functions, the app falls back to public relays and fundamentals show as unavailable.)
+        <span class="ic" id="noticeIcon" aria-hidden="true"></span>
+        <div><b>Honest by design.</b> On the Vercel deployment, serverless functions proxy market data so this covers price/technicals, trend, risk, relative strength <b>and fundamentals</b> (P/E, P/B, ROE, margins, debt, cash flow) feeding the score. Data is <b>delayed</b>, never real-time, always timestamped. News, ownership &amp; backtesting need further data and are shown as <b>unavailable</b> rather than invented.</div>
       </div>
     </section>
 
-    <section id="result" style="display:none"></section>
+    <section id="result" role="region" aria-live="polite" aria-label="Analysis result" style="display:none"></section>
 
     <section class="card watchlist-card">
-      <h3>★ Watchlist</h3>
+      <h3><span id="wlHeadIcon" aria-hidden="true"></span> Watchlist</h3>
       <div id="watchlist"></div>
     </section>
   </main>
 
   <footer class="foot">
+    <div class="brand-row"><span id="footMark" aria-hidden="true"></span> ArthaScope</div>
     <p><b>Disclaimer:</b> Quantitative analytical signals from publicly available, delayed data. <b>Not</b> investment advice, not a prediction of future returns, and not a guarantee of any outcome. Verify independently before investing.</p>
-    <p class="muted small">Data relays tried in order: <span id="relays"></span> · Prices are delayed, never real-time · No values are fabricated when a source fails.</p>
+    <p class="muted small">Prices are delayed, never real-time · No values are fabricated when a source fails · Data relays: <span id="relays"></span></p>
   </footer>
 
-  <!-- Tabs template cloned into each result render -->
   <template id="tabs-template">
-    <div class="tabs">
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="score">Score</button>
-      <button class="tab" data-tab="technical">Technical</button>
-      <button class="tab" data-tab="risk">Price &amp; Risk</button>
-      <button class="tab" data-tab="charts">Charts</button>
-      <button class="tab" data-tab="fundamentals">Fundamentals</button>
-      <button class="tab" data-tab="news">News &amp; Ownership</button>
-      <button class="tab" data-tab="audit">Data &amp; Audit</button>
+    <div class="tabs" role="tablist" aria-label="Analysis sections">
+      <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" data-tab="overview">Overview</button>
+      <button class="tab" role="tab" id="tab-score" aria-controls="panel-score" aria-selected="false" tabindex="-1" data-tab="score">Score</button>
+      <button class="tab" role="tab" id="tab-technical" aria-controls="panel-technical" aria-selected="false" tabindex="-1" data-tab="technical">Technical</button>
+      <button class="tab" role="tab" id="tab-risk" aria-controls="panel-risk" aria-selected="false" tabindex="-1" data-tab="risk">Price &amp; Risk</button>
+      <button class="tab" role="tab" id="tab-charts" aria-controls="panel-charts" aria-selected="false" tabindex="-1" data-tab="charts">Charts</button>
+      <button class="tab" role="tab" id="tab-fundamentals" aria-controls="panel-fundamentals" aria-selected="false" tabindex="-1" data-tab="fundamentals">Fundamentals</button>
+      <button class="tab" role="tab" id="tab-news" aria-controls="panel-news" aria-selected="false" tabindex="-1" data-tab="news">News &amp; Ownership</button>
+      <button class="tab" role="tab" id="tab-audit" aria-controls="panel-audit" aria-selected="false" tabindex="-1" data-tab="audit">Data &amp; Audit</button>
     </div>
-    <div id="panel-overview" class="tab-panel active"></div>
-    <div id="panel-score" class="tab-panel"></div>
-    <div id="panel-technical" class="tab-panel"></div>
-    <div id="panel-risk" class="tab-panel"></div>
-    <div id="panel-charts" class="tab-panel">
+    <div id="panel-overview" class="tab-panel active" role="tabpanel" aria-labelledby="tab-overview" tabindex="0"></div>
+    <div id="panel-score" class="tab-panel" role="tabpanel" aria-labelledby="tab-score" tabindex="0" hidden></div>
+    <div id="panel-technical" class="tab-panel" role="tabpanel" aria-labelledby="tab-technical" tabindex="0" hidden></div>
+    <div id="panel-risk" class="tab-panel" role="tabpanel" aria-labelledby="tab-risk" tabindex="0" hidden></div>
+    <div id="panel-charts" class="tab-panel" role="tabpanel" aria-labelledby="tab-charts" tabindex="0" hidden>
       <div class="card">
-        <div class="range-row">
-          <button class="range-btn" data-range="1M">1M</button>
-          <button class="range-btn" data-range="3M">3M</button>
-          <button class="range-btn" data-range="6M">6M</button>
-          <button class="range-btn active" data-range="1Y">1Y</button>
-          <button class="range-btn" data-range="3Y">3Y</button>
-          <button class="range-btn" data-range="5Y">5Y</button>
-          <button class="range-btn" data-range="MAX">MAX</button>
+        <div class="range-row" role="group" aria-label="Chart time range">
+          <button class="range-btn" data-range="1M" aria-pressed="false">1M</button>
+          <button class="range-btn" data-range="3M" aria-pressed="false">3M</button>
+          <button class="range-btn" data-range="6M" aria-pressed="false">6M</button>
+          <button class="range-btn" data-range="1Y" aria-pressed="true">1Y</button>
+          <button class="range-btn" data-range="3Y" aria-pressed="false">3Y</button>
+          <button class="range-btn" data-range="5Y" aria-pressed="false">5Y</button>
+          <button class="range-btn" data-range="MAX" aria-pressed="false">MAX</button>
         </div>
-        <h4>Price with SMA 50 / 200</h4><div class="chart-box"><canvas id="chartPrice"></canvas></div>
-        <h4>Volume</h4><div class="chart-box"><canvas id="chartVolume"></canvas></div>
-        <h4>RSI (14)</h4><div class="chart-box"><canvas id="chartRsi"></canvas></div>
+        <h4>Price with SMA 50 / 200</h4><div class="chart-box"><canvas id="chartPrice" aria-label="Price chart"></canvas></div>
+        <h4>Volume</h4><div class="chart-box"><canvas id="chartVolume" aria-label="Volume chart"></canvas></div>
+        <h4>RSI (14)</h4><div class="chart-box"><canvas id="chartRsi" aria-label="RSI chart"></canvas></div>
       </div>
     </div>
-    <div id="panel-fundamentals" class="tab-panel"></div>
-    <div id="panel-news" class="tab-panel"></div>
-    <div id="panel-audit" class="tab-panel"></div>
+    <div id="panel-fundamentals" class="tab-panel" role="tabpanel" aria-labelledby="tab-fundamentals" tabindex="0" hidden></div>
+    <div id="panel-news" class="tab-panel" role="tabpanel" aria-labelledby="tab-news" tabindex="0" hidden></div>
+    <div id="panel-audit" class="tab-panel" role="tabpanel" aria-labelledby="tab-audit" tabindex="0" hidden></div>
   </template>
 
   <script type="module" src="js/app.js"></script>
