@@ -1,0 +1,15 @@
+{
+  "name": "bsk-stock-analyser-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Functional + accessibility tests for BSK Stock Analyser (Playwright + axe-core).",
+  "scripts": {
+    "test": "node run.cjs",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.0",
+    "axe-core": "^4.13.0",
+    "chart.js": "^4.4.3"
+  }
+}

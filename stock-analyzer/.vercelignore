@@ -1,0 +1,4 @@
+# Keep the deployment lean — the test suite and deps never ship to Vercel.
+tests
+node_modules
+.git

@@ -150,6 +150,20 @@ python3 -m http.server 8000
 ```
 Open the browser console to see the indicator self-test on load.
 
+## Tests
+
+A functional + accessibility suite lives in [`tests/`](tests/). It runs **offline** —
+it serves the app locally and mocks the network layer (Yahoo / `/api` + Chart.js) with
+Playwright, then drives the real app end-to-end and runs an axe-core audit.
+
+```bash
+cd tests && npm install && npm test   # 39 checks; exits non-zero on failure
+```
+
+Covers search, the full analysis render, all tabs, charts, watchlist & theme persistence,
+BSE fallback, the error path (no fabricated data), and accessibility. Excluded from the
+Vercel deployment via `.vercelignore`.
+
 ## Notes & limitations
 - Yahoo’s fundamentals (crumb) handshake changes often; `api/quote.js` degrades honestly to
   “unavailable” when it breaks. A licensed feed (Alpha Vantage / FMP / vendor) removes the
