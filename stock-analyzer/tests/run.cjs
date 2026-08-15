@@ -104,6 +104,12 @@ async function axeAudit(page, label) {
       await page.goto('/index.html', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(400);
       await axeAudit(page, 'landing');
 
+      // Google sign-in: disabled by default (no client id) -> hidden, no GIS script loaded
+      check('gsync: account hidden when unconfigured', await page.$eval('#account', (n) => n.hidden === true));
+      check('gsync: no external GIS script when disabled', (await page.$$('script[src*="gsi/client"]')).length === 0);
+      const merged = await page.evaluate(async () => { const G = await import('/js/gsync.js'); return G.mergeData({ watchlist: [{ s: 'A' }], theme: 'dark', updatedAt: 1 }, { watchlist: [{ s: 'B' }], theme: 'light', updatedAt: 2 }); });
+      check('gsync: mergeData unions watchlist + takes newer theme', merged.watchlist.length === 2 && merged.watchlist.some((x) => x.s === 'A') && merged.watchlist.some((x) => x.s === 'B') && merged.theme === 'light', JSON.stringify(merged));
+
       await page.fill('#search', 'reliance'); await page.waitForTimeout(700);
       check('search: dropdown shows options', (await page.$$('#suggestions .suggestion')).length >= 1);
       check('search: BSE dual-listing surfaced', (await page.$$('#suggestions .exch.bse')).length >= 1);

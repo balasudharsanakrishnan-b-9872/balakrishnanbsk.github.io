@@ -78,6 +78,10 @@ The app is built to be honest about what it can and can't know.
   (revenue/earnings), financial health (D/E, current ratio, cash vs debt, FCF).
 - **Transparent scoring** + decision engine + red-flag engine + confidence & data-quality.
 - **Watchlist** (localStorage) and **interactive charts**.
+- **Optional Google sign-in + sync** — sign in with Google to sync your watchlist &
+  theme to your *own* Google Drive (hidden app-data folder). **No database, no client
+  secret.** Disabled until you add a Google OAuth **Web client ID** in `js/config.js`
+  (see the setup steps in that file); the app works fully without it.
 
 ### Still marked "unavailable" (need further integrations)
 - **News & sentiment** — needs a news API / RSS aggregation on the backend.
@@ -114,6 +118,8 @@ stock-analyzer/
 │   ├── analysis.js     technical/trend/risk + fundamental scorers + decision + red flags
 │   ├── charts.js       Chart.js wrappers
 │   ├── icons.js        hand-built SVG icon set + brand logo mark + favicon
+│   ├── config.js       GOOGLE_CLIENT_ID (optional Google sign-in) + setup notes
+│   ├── gsync.js        optional Google sign-in + sync to the user's Google Drive
 │   └── app.js          orchestration + rendering + theming + a11y + watchlist
 ├── api/                Vercel serverless functions (Node)
 │   ├── history.js      server proxy → Yahoo v8/chart (kills the CORS-relay dependency)
@@ -171,7 +177,7 @@ it serves the app locally and mocks the network layer (Yahoo / `/api` + Chart.js
 Playwright, then drives the real app end-to-end and runs an axe-core audit.
 
 ```bash
-cd tests && npm install && npm test   # 56 checks; exits non-zero on failure
+cd tests && npm install && npm test   # 59 checks; exits non-zero on failure
 ```
 
 Covers search, the full analysis render, all tabs, charts, watchlist & theme persistence,

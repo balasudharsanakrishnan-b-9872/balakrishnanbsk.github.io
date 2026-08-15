@@ -121,7 +121,9 @@ stock-analyzer/
 │   ├── analysis.js     # technical/trend/risk + scoring + decision + red-flag engines
 │   ├── charts.js       # Chart.js wrappers (price / volume / RSI / score)
 │   ├── icons.js        # hand-built SVG icon set + logo mark + favicon
-│   └── app.js          # orchestration, rendering, theming, a11y, watchlist
+│   ├── config.js       # GOOGLE_CLIENT_ID for optional Google sign-in (+ setup notes)
+│   ├── gsync.js        # optional Google sign-in + sync to the user's Google Drive appData
+│   └── app.js          # orchestration, rendering, theming, a11y, watchlist, account UI
 ├── api/                # Vercel serverless functions (Node)
 │   ├── history.js      # proxy → Yahoo v8/chart
 │   ├── quote.js        # proxy → Yahoo quoteSummary (fundamentals; crumb handshake)
@@ -293,6 +295,20 @@ Fonts: change the `<link>` in `index.html` and the font-family stacks in the CSS
 filled) and call `icon('name')`. The logo is `logoMark()`; the favicon is
 `faviconDataUri()` — keep them visually in sync.
 
+### Enable Google sign-in & Drive sync (optional)
+Paste a Google OAuth **Web** client ID into `js/config.js` → `GOOGLE_CLIENT_ID`. That's it
+— the "Sign in" button appears and syncing turns on. Setup steps are in the comment at the
+top of `config.js` (enable Google Drive API; add scopes openid/email/profile/`drive.appdata`;
+add your origin to the client's Authorized JavaScript origins). How it works:
+- `js/gsync.js` uses the browser-only **GIS token flow** (no client secret) to get a
+  short-lived access token, then reads/writes **one JSON file** in the Drive
+  `appDataFolder` (hidden, private to this app). It only touches the watchlist + theme.
+- `app.js` renders the account button/menu (`renderAccount`), and on sign-in runs
+  `onGoogleSignedIn`: pull remote → `mergeData` (unions watchlists, newer theme wins) →
+  apply locally → push back. Local changes (`setWL`, theme toggle) call `schedulePush`
+  (debounced). Nothing else leaves the browser, and there is **no database**.
+- To sync more keys, extend `getLocalData()`/`mergeData()` in `app.js`/`gsync.js`.
+
 ---
 
 ## 8. Serverless API reference
@@ -346,7 +362,7 @@ Preserve these when editing (the test suite checks them):
 ```bash
 cd tests
 npm install     # Playwright + axe-core + Chart.js; downloads Chromium (postinstall)
-npm test        # 56 checks; non-zero exit on failure
+npm test        # 59 checks; non-zero exit on failure
 # or, with a pre-installed browser:
 PW_EXECUTABLE=/path/to/chrome npm test
 ```

@@ -159,6 +159,28 @@ code { background: var(--surface-2); border: 1px solid var(--border); padding: .
 .icon-btn:active { transform: scale(.94); }
 .icon-btn .ic { width: 20px; height: 20px; }
 
+/* ---------------- account (Google sign-in) ---------------- */
+.account { position: relative; }
+.account[hidden] { display: none; }
+.gbtn { display: inline-flex; align-items: center; gap: .5rem; font: inherit; font-size: .85rem; font-weight: 500; cursor: pointer; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); padding: .45rem .8rem; border-radius: 11px; transition: border-color .15s, background .15s; }
+.gbtn:hover { border-color: var(--brand); }
+.gbtn.signed { padding: .3rem .6rem .3rem .35rem; gap: .4rem; }
+.gbtn .gname { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gbtn .ic { color: var(--dim); width: 16px; height: 16px; }
+.avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.avatar.init { display: grid; place-items: center; background: var(--brand); color: #04140e; font-weight: 700; font-size: .8rem; }
+.account-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 80; min-width: 240px; background: var(--surface); border: 1px solid var(--border-2); border-radius: 14px; box-shadow: var(--shadow-lg); padding: .5rem; }
+.account-menu[hidden] { display: none; }
+.am-head { display: flex; align-items: center; gap: .6rem; padding: .5rem .6rem .7rem; border-bottom: 1px solid var(--border); margin-bottom: .4rem; }
+.am-head .am-id { overflow: hidden; }
+.am-head b { display: block; font-size: .88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.am-head small { color: var(--dim); font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.account-menu button[role="menuitem"] { display: flex; align-items: center; gap: .5rem; width: 100%; text-align: left; font: inherit; font-size: .85rem; cursor: pointer; background: none; border: none; color: var(--text); padding: .5rem .6rem; border-radius: 9px; }
+.account-menu button[role="menuitem"]:hover { background: var(--surface-2); }
+.account-menu .ic { width: 16px; height: 16px; color: var(--dim); }
+.am-note { font-size: .72rem; color: var(--faint); padding: .5rem .6rem 0; margin: .3rem 0 0; border-top: 1px solid var(--border); }
+@media (max-width: 560px) { .gbtn .gname { display: none; } .account-menu { right: -40px; } }
+
 /* ---------------- layout ---------------- */
 main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.3rem 0; }
 .intro { padding: 1.4rem 0 1rem; }

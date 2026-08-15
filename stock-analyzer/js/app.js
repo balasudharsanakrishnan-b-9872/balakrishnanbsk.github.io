@@ -7,6 +7,7 @@ import * as A from './analysis.js';
 import * as I from './indicators.js';
 import * as C from './charts.js';
 import { icon, logoMark, faviconDataUri } from './icons.js';
+import * as G from './gsync.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -62,23 +63,98 @@ function setupChrome() {
     brand.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); } };
   }
 
-  const btn = $('#themeToggle');
-  const apply = (mode) => {
-    if (mode) document.documentElement.setAttribute('data-theme', mode);
-    else document.documentElement.removeAttribute('data-theme');
-    const dark = mode ? mode === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-    if (btn) { btn.innerHTML = icon(dark ? 'sun' : 'moon', 'ic'); btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme'); }
-  };
   let stored = null; try { stored = localStorage.getItem('sa_theme'); } catch (_) {}
-  apply(stored === 'light' || stored === 'dark' ? stored : null);
+  applyThemeMode(stored === 'light' || stored === 'dark' ? stored : null);
+  const btn = $('#themeToggle');
   if (btn) btn.onclick = () => {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
       (!document.documentElement.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
     const next = isDark ? 'light' : 'dark';
-    try { localStorage.setItem('sa_theme', next); } catch (_) {}
-    apply(next);
+    try { localStorage.setItem('sa_theme', next); localStorage.setItem('sa_updatedAt', String(Date.now())); } catch (_) {}
+    applyThemeMode(next);
     if (CURRENT) { drawCharts(); if ($('#chartScore')) renderScorePanel(CURRENT); }
+    schedulePush();
   };
+
+  // Google Sign-In (optional; inert unless a client ID is configured in config.js)
+  setupAccount();
+}
+
+// Module-level so Google-sync can re-apply a synced theme too.
+function applyThemeMode(mode) {
+  if (mode) document.documentElement.setAttribute('data-theme', mode);
+  else document.documentElement.removeAttribute('data-theme');
+  const dark = mode ? mode === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const btn = $('#themeToggle');
+  if (btn) { btn.innerHTML = icon(dark ? 'sun' : 'moon', 'ic'); btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme'); }
+}
+const currentTheme = () => { const t = document.documentElement.getAttribute('data-theme'); return t === 'light' || t === 'dark' ? t : null; };
+
+// ---------------- Google Sign-In + Drive sync (optional) ----------------
+const googleG = () => '<svg class="ic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-2 3.2-4.9 3.2-7.8z"/><path fill="#34A853" d="M12 23c2.9 0 5.4-1 7.2-2.6l-3.6-2.7c-1 .7-2.3 1.1-3.6 1.1-2.8 0-5.1-1.9-6-4.4H2.3v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M6 14.4a6.6 6.6 0 0 1 0-4.2V7.4H2.3a11 11 0 0 0 0 9.8L6 14.4z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3 .5 4.1 1.6l3.1-3.1A11 11 0 0 0 12 1 11 11 0 0 0 2.3 7.4L6 10.2c.9-2.6 3.2-4.8 6-4.8z"/></svg>';
+
+function getLocalData() {
+  let ts = 0; try { ts = Number(localStorage.getItem('sa_updatedAt')) || 0; } catch (_) {}
+  return { watchlist: getWL(), theme: currentTheme(), updatedAt: ts };
+}
+
+let pushTimer = null;
+function schedulePush() {
+  if (!G.getState().signedIn) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => { G.push(getLocalData()); }, 1200);
+}
+
+async function onGoogleSignedIn() {
+  const remote = await G.pull();
+  const merged = G.mergeData(getLocalData(), remote);
+  setWL(merged.watchlist);
+  try { if (merged.theme) localStorage.setItem('sa_theme', merged.theme); localStorage.setItem('sa_updatedAt', String(merged.updatedAt)); } catch (_) {}
+  applyThemeMode(merged.theme || currentTheme());
+  renderWatchlist();
+  const home = $('#home');
+  if (home && home.style.display !== 'none') loadHome(true);
+  if (CURRENT) { drawCharts(); if ($('#chartScore')) renderScorePanel(CURRENT); }
+  await G.push(merged);
+  renderAccount(G.getState());
+}
+
+function setupAccount() {
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#account')) return;
+    const m = $('#accountMenu'), b = $('#accountBtn');
+    if (m) m.hidden = true; if (b) b.setAttribute('aria-expanded', 'false');
+  });
+  G.setOnSignedIn(onGoogleSignedIn);
+  G.initGoogle((state) => renderAccount(state));
+}
+
+function renderAccount(state) {
+  const host = $('#account'); if (!host) return;
+  if (!state.enabled) { host.hidden = true; host.innerHTML = ''; return; }
+  host.hidden = false;
+  if (!state.signedIn) {
+    host.innerHTML = `<button class="gbtn" id="googleSignIn" type="button">${googleG()}<span>Sign in</span></button>`;
+    $('#googleSignIn').onclick = () => G.signIn();
+    return;
+  }
+  const p = state.profile || {};
+  const initial = String(p.name || p.email || '?').trim().charAt(0).toUpperCase();
+  const av = p.picture ? `<img class="avatar" src="${escAttr(p.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar init">${initial}</span>`;
+  host.innerHTML = `
+    <div class="account-wrap">
+      <button class="gbtn signed" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu">${av}<span class="gname">${escAttr(p.name || p.email || 'Account')}</span>${icon('chevronDown', 'ic')}</button>
+      <div class="account-menu" id="accountMenu" role="menu" hidden>
+        <div class="am-head">${av}<div class="am-id"><b>${escAttr(p.name || '')}</b><small>${escAttr(p.email || '')}</small></div></div>
+        <button role="menuitem" id="amSync" type="button">${icon('refresh', 'ic')} Sync now</button>
+        <button role="menuitem" id="amOut" type="button">${icon('close', 'ic')} Sign out</button>
+        <p class="am-note">Synced to your Google Drive app data. No database, private to you.</p>
+      </div>
+    </div>`;
+  const menu = $('#accountMenu'), abtn = $('#accountBtn');
+  abtn.onclick = () => { const open = menu.hidden; menu.hidden = !open; abtn.setAttribute('aria-expanded', String(open)); };
+  $('#amSync').onclick = async () => { menu.hidden = true; await onGoogleSignedIn(); };
+  $('#amOut').onclick = () => { menu.hidden = true; G.signOut(); };
 }
 
 function wireQuickButtons() {
@@ -727,7 +803,7 @@ function mvCard(ic, title, sub, rows, extraFn) {
 // ---------------- watchlist (localStorage, spec §27) ----------------
 const WL_KEY = 'sa_watchlist';
 const getWL = () => { try { return JSON.parse(localStorage.getItem(WL_KEY)) || []; } catch (_) { return []; } };
-const setWL = (a) => localStorage.setItem(WL_KEY, JSON.stringify(a));
+const setWL = (a) => { localStorage.setItem(WL_KEY, JSON.stringify(a)); try { localStorage.setItem('sa_updatedAt', String(Date.now())); } catch (_) {} schedulePush(); };
 const inWatchlist = (s) => getWL().some((x) => x.s === s);
 function toggleWatchlist(meta) {
   let wl = getWL();
