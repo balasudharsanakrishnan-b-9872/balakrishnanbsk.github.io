@@ -266,6 +266,36 @@ async function axeAudit(page, label) {
       await ctx.close();
     }
 
+    // ===== Scenario H: Google sign-in + Drive sync (fully mocked Google) =====
+    {
+      const ctx = await makeContext(browser, base);
+      // seed a local watchlist + old timestamp so the merge + newer-remote-theme are observable
+      await ctx.addInitScript(() => { try { localStorage.setItem('sa_watchlist', JSON.stringify([{ s: 'TCS', n: 'Tata Consultancy Services' }])); localStorage.setItem('sa_updatedAt', '1'); } catch (e) {} });
+      // enable the feature by returning a dummy client id from config.js
+      await ctx.route(/\/js\/config\.js$/, (r) => r.fulfill({ contentType: 'text/javascript', body: "export const GOOGLE_CLIENT_ID='test.apps.googleusercontent.com';" }));
+      // stub Google Identity Services: requestAccessToken immediately returns a token
+      await ctx.route(/accounts\.google\.com\/gsi\/client/, (r) => r.fulfill({ contentType: 'text/javascript', body: "window.google={accounts:{oauth2:{initTokenClient:(c)=>({requestAccessToken:()=>c.callback({access_token:'FAKE'})}),revoke:(t,cb)=>cb&&cb()}}};" }));
+      await ctx.route(/oauth2\/v3\/userinfo/, (r) => r.fulfill({ json: { name: 'Test User', email: 'test@example.com', picture: '' } }));
+      await ctx.route(/\/drive\/v3\/files\/FILEID\?alt=media/, (r) => r.fulfill({ json: { watchlist: [{ s: 'INFY', n: 'Infosys' }], theme: 'light', updatedAt: 9999999999999 } }));
+      await ctx.route(/\/drive\/v3\/files\?/, (r) => r.fulfill({ json: { files: [{ id: 'FILEID', modifiedTime: '2030-01-01T00:00:00Z' }] } }));
+      let uploads = 0;
+      await ctx.route(/\/upload\/drive\/v3\/files/, (r) => { uploads++; r.fulfill({ json: { id: 'FILEID' } }); });
+
+      const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(500);
+      check('gsync(mock): sign-in button shown when configured', !!(await page.$('#googleSignIn')));
+      await page.click('#googleSignIn');
+      await page.waitForSelector('#accountBtn', { timeout: 8000 }); await page.waitForTimeout(500);
+      check('gsync(mock): signed-in shows profile name', /Test User/.test(await page.$eval('#accountBtn', (n) => n.textContent)));
+      const wl = await page.$$eval('#watchlist .wl-chip b', (ns) => ns.map((n) => n.textContent));
+      check('gsync(mock): watchlist merged (local TCS + remote INFY)', wl.includes('TCS') && wl.includes('INFY'), wl.join(','));
+      check('gsync(mock): newer remote theme applied (light)', (await page.getAttribute('html', 'data-theme')) === 'light');
+      check('gsync(mock): merged data pushed to Drive', uploads >= 1, 'uploads=' + uploads);
+      await page.click('#accountBtn'); await page.waitForTimeout(100); await page.click('#amOut'); await page.waitForTimeout(300);
+      check('gsync(mock): sign out returns to Sign in', !!(await page.$('#googleSignIn')));
+      await ctx.close();
+    }
+
     check('global: no uncaught console/page errors', errs.length === 0, errs.slice(0, 8).join(' | '));
   } catch (e) {
     check('harness completed without throwing', false, e.message);
