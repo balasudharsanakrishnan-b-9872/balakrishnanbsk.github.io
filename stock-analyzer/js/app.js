@@ -168,21 +168,40 @@ function wireQuickButtons() {
 function wireSearch() {
   const input = $('#search');
   const box = $('#suggestions');
-  let seq = 0, timer = null;
+  let seq = 0, timer = null, activeIdx = -1;
 
-  const row = (it) => {
+  const options = () => [...box.querySelectorAll('.suggestion:not(.note)')];
+  const pick = (it) => { input.value = it.s; close(); runAnalysis(it.query || it.s, { n: it.n, sector: it.sector, industry: it.industry }); };
+  const row = (it, i) => {
     const badge = it.exch ? `<em class="exch ${it.exch.toLowerCase()}">${it.exch}</em>` : '';
     const item = el('div', 'suggestion', `<b>${it.s}</b> <span>${it.n}</span>${badge}`);
+    item.id = 'sugg-' + i;
     item.setAttribute('role', 'option');
-    item.onclick = () => { input.value = it.s; close(); runAnalysis(it.query || it.s, { n: it.n, sector: it.sector, industry: it.industry }); };
+    item.setAttribute('aria-selected', 'false');
+    item.dataset.idx = String(i);
+    item.__it = it;
+    item.onmousemove = () => setActive(i);
+    item.onclick = () => pick(it);
     return item;
   };
+  const setActive = (i) => {
+    const opts = options();
+    if (!opts.length) { activeIdx = -1; return; }
+    activeIdx = (i + opts.length) % opts.length;
+    opts.forEach((o, k) => o.setAttribute('aria-selected', k === activeIdx ? 'true' : 'false'));
+    opts.forEach((o) => o.classList.remove('active'));
+    const cur = opts[activeIdx];
+    cur.classList.add('active');
+    cur.scrollIntoView({ block: 'nearest' });
+    input.setAttribute('aria-activedescendant', cur.id);
+  };
   const open = () => { box.style.display = 'block'; input.setAttribute('aria-expanded', 'true'); };
-  const close = () => { box.style.display = 'none'; input.setAttribute('aria-expanded', 'false'); };
+  const close = () => { box.style.display = 'none'; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); activeIdx = -1; };
   const paint = (items, note) => {
     box.innerHTML = '';
+    activeIdx = -1; input.removeAttribute('aria-activedescendant');
     if (note) box.appendChild(el('div', 'suggestion note', `<span class="muted">${note}</span>`));
-    items.forEach((it) => box.appendChild(row(it)));
+    items.forEach((it, i) => box.appendChild(row(it, i)));
     if (items.length || note) open(); else close();
   };
 
@@ -209,13 +228,20 @@ function wireSearch() {
 
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(doSearch, 250); });
   input.addEventListener('keydown', (e) => {
+    const opts = options();
+    const isOpen = box.style.display === 'block';
     if (e.key === 'Escape') { close(); return; }
+    if (e.key === 'ArrowDown') { if (isOpen && opts.length) { e.preventDefault(); setActive(activeIdx < 0 ? 0 : activeIdx + 1); } return; }
+    if (e.key === 'ArrowUp') { if (isOpen && opts.length) { e.preventDefault(); setActive(activeIdx <= 0 ? opts.length - 1 : activeIdx - 1); } return; }
     if (e.key !== 'Enter') return;
+    // Enter: use the highlighted suggestion if any…
+    if (isOpen && activeIdx >= 0 && opts[activeIdx]) { e.preventDefault(); pick(opts[activeIdx].__it); return; }
+    // …otherwise analyze what was typed (known name if matched, else the raw symbol/code)
     const q = input.value.trim();
     if (!q) return;
     close();
     const r = searchStocks(q);
-    runAnalysis(r[0] ? r[0].s : q.toUpperCase()); // known name if matched, else analyze the raw symbol/code
+    runAnalysis(r[0] ? r[0].s : q.toUpperCase());
   });
   document.addEventListener('click', (e) => { if (!e.target.closest('.search-wrap')) close(); });
 }
@@ -832,14 +858,14 @@ function computeScreens(quotes) {
   const sectors = [...map.entries()].map(([k, v]) => ({ sector: k, label: SECTORS[k] || k, avg: v.sum / v.n, n: v.n })).sort((a, b) => b.avg - a.avg);
   return {
     breadth: { adv, dec, unch: withPct.length - adv - dec, total: withPct.length },
-    gainers: [...withPct].sort((a, b) => b.changePct - a.changePct).slice(0, 6),
-    losers: [...withPct].sort((a, b) => a.changePct - b.changePct).slice(0, 6),
-    active: rows.filter((r) => r.value != null).sort((a, b) => b.value - a.value).slice(0, 6),
-    activeVol: rows.filter((r) => r.volume != null).sort((a, b) => b.volume - a.volume).slice(0, 6),
-    shockers: rows.filter((r) => r.volRatio != null).sort((a, b) => b.volRatio - a.volRatio).slice(0, 6),
-    high52: rows.filter((r) => r.pctFromHigh != null).sort((a, b) => b.pctFromHigh - a.pctFromHigh).slice(0, 6),
-    low52: rows.filter((r) => r.pctAboveLow != null).sort((a, b) => a.pctAboveLow - b.pctAboveLow).slice(0, 6),
-    valuable: rows.filter((r) => r.marketCap > 0).sort((a, b) => b.marketCap - a.marketCap).slice(0, 6),
+    gainers: [...withPct].sort((a, b) => b.changePct - a.changePct),
+    losers: [...withPct].sort((a, b) => a.changePct - b.changePct),
+    active: rows.filter((r) => r.value != null).sort((a, b) => b.value - a.value),
+    activeVol: rows.filter((r) => r.volume != null).sort((a, b) => b.volume - a.volume),
+    shockers: rows.filter((r) => r.volRatio != null).sort((a, b) => b.volRatio - a.volRatio),
+    high52: rows.filter((r) => r.pctFromHigh != null).sort((a, b) => b.pctFromHigh - a.pctFromHigh),
+    low52: rows.filter((r) => r.pctAboveLow != null).sort((a, b) => a.pctAboveLow - b.pctAboveLow),
+    valuable: rows.filter((r) => r.marketCap > 0).sort((a, b) => b.marketCap - a.marketCap),
     sectors,
   };
 }
@@ -895,26 +921,56 @@ function renderHome(movers, indices) {
     ${s.sectors.length ? `<div class="card sector-card"><h3>${icon('activity', 'ic')} Trending sectors</h3><div class="sector-heat">${sectorChips}</div></div>` : ''}
 
     <div class="home-grid">
-      ${mvCard('trendUp', 'Top gainers', '', s.gainers, (r) => '')}
-      ${mvCard('trendDown', 'Top losers', '', s.losers, (r) => '')}
-      ${mvCard('activity', 'Most active', 'by value', s.active, (r) => `<span class="mv-extra">${crFmt(r.value)}</span>`)}
-      ${mvCard('barChart', 'Most active', 'by volume', s.activeVol, (r) => `<span class="mv-extra">${volFmt(r.volume)}</span>`)}
-      ${mvCard('bolt', 'Volume shockers', '', s.shockers, (r) => `<span class="mv-extra">${fmtNum(r.volRatio, 1)}× avg</span>`)}
-      ${mvCard('target', 'Most valuable', 'by m-cap', s.valuable, (r) => `<span class="mv-extra">${crFmt(r.marketCap)}</span>`)}
-      ${mvCard('trendUp', 'Near 52-wk high', '', s.high52, (r) => `<span class="mv-extra">${fmtNum(r.pctFromHigh, 1)}%</span>`)}
-      ${mvCard('trendDown', 'Near 52-wk low', '', s.low52, (r) => `<span class="mv-extra">+${fmtNum(r.pctAboveLow, 1)}%</span>`)}
+      ${SCREEN_DEFS.map((c) => mvCard(c, s[c.key])).join('')}
     </div>
     <p class="home-note muted small">${icon('info', 'ic')} Screens are computed from the ${N} stocks this tool tracks (a curated cross-sector sample), not the entire market. Prices are delayed. Source: ${movers.source}${movers.cached ? ' · cached' : ''}, as of ${fmtDateTime(movers.asOf)}.</p>`;
 
+  // stash full lists so the "Show all" dialog can list every entry
+  HOME_SCREENS = {};
+  SCREEN_DEFS.forEach((c) => { HOME_SCREENS[c.key] = { ...c, rows: s[c.key] || [] }; });
+
   const rf = $('#homeRefresh'); if (rf) rf.onclick = () => loadHome(true);
+  host.querySelectorAll('.show-all').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); openScreenDialog(b.dataset.screen); }; });
   host.querySelectorAll('.mv-row').forEach((btn) => {
     btn.onclick = () => runAnalysis(btn.dataset.s, { n: btn.dataset.n, sector: btn.dataset.sec || 'OTHER' });
   });
 }
 
-function mvCard(ic, title, sub, rows, extraFn) {
-  const body = rows.length ? rows.map((r) => moverRow(r, extraFn(r))).join('') : '<p class="muted small" style="padding:.6rem .2rem">No data.</p>';
-  return `<div class="card mv-card"><h3>${icon(ic, 'ic')} ${title}${sub ? ` <span class="muted small">${sub}</span>` : ''}</h3><div class="mv-list">${body}</div></div>`;
+// One definition per home screen — drives the cards AND the "Show all" dialog.
+const SCREEN_DEFS = [
+  { key: 'gainers', ic: 'trendUp', title: 'Top gainers', sub: '', extra: () => '' },
+  { key: 'losers', ic: 'trendDown', title: 'Top losers', sub: '', extra: () => '' },
+  { key: 'active', ic: 'activity', title: 'Most active', sub: 'by value', extra: (r) => `<span class="mv-extra">${crFmt(r.value)}</span>` },
+  { key: 'activeVol', ic: 'barChart', title: 'Most active', sub: 'by volume', extra: (r) => `<span class="mv-extra">${volFmt(r.volume)}</span>` },
+  { key: 'shockers', ic: 'bolt', title: 'Volume shockers', sub: '', extra: (r) => `<span class="mv-extra">${fmtNum(r.volRatio, 1)}× avg</span>` },
+  { key: 'valuable', ic: 'target', title: 'Most valuable', sub: 'by m-cap', extra: (r) => `<span class="mv-extra">${crFmt(r.marketCap)}</span>` },
+  { key: 'high52', ic: 'trendUp', title: 'Near 52-wk high', sub: '', extra: (r) => `<span class="mv-extra">${fmtNum(r.pctFromHigh, 1)}%</span>` },
+  { key: 'low52', ic: 'trendDown', title: 'Near 52-wk low', sub: '', extra: (r) => `<span class="mv-extra">+${fmtNum(r.pctAboveLow, 1)}%</span>` },
+];
+let HOME_SCREENS = {};
+
+function mvCard(cfg, rows) {
+  rows = rows || [];
+  const shown = rows.slice(0, 6);
+  const body = shown.length ? shown.map((r) => moverRow(r, cfg.extra(r))).join('') : '<p class="muted small" style="padding:.6rem .2rem">No data.</p>';
+  const more = rows.length > 6 ? `<button class="show-all" data-screen="${cfg.key}" type="button">Show all ${rows.length}</button>` : '';
+  return `<div class="card mv-card"><h3>${icon(cfg.ic, 'ic')} ${cfg.title}${cfg.sub ? ` <span class="muted small">${cfg.sub}</span>` : ''}${more}</h3><div class="mv-list">${body}</div></div>`;
+}
+
+// Full-list dialog (native <dialog>: Escape closes, focus trapped, focus restored).
+function openScreenDialog(key) {
+  const cfg = HOME_SCREENS[key]; const dlg = $('#screenDialog');
+  if (!cfg || !dlg) return;
+  dlg.innerHTML = `
+    <div class="modal-head">
+      <h3>${icon(cfg.ic, 'ic')} ${cfg.title}${cfg.sub ? ` <span class="muted small">${cfg.sub}</span>` : ''} <span class="muted small">(${cfg.rows.length})</span></h3>
+      <button class="icon-btn sm" id="dlgClose" type="button" aria-label="Close">${icon('close', 'ic')}</button>
+    </div>
+    <div class="modal-body mv-list">${cfg.rows.map((r) => moverRow(r, cfg.extra(r))).join('')}</div>`;
+  dlg.querySelectorAll('.mv-row').forEach((b) => { b.onclick = () => { dlg.close(); runAnalysis(b.dataset.s, { n: b.dataset.n, sector: b.dataset.sec || 'OTHER' }); }; });
+  $('#dlgClose').onclick = () => dlg.close();
+  dlg.onclick = (e) => { if (e.target === dlg) dlg.close(); }; // backdrop click
+  dlg.showModal();
 }
 
 // ---------------- watchlist (localStorage, spec §27) ----------------

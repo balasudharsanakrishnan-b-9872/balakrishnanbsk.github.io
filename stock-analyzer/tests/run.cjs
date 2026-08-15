@@ -129,8 +129,15 @@ async function axeAudit(page, label) {
       check('search: BSE dual-listing surfaced', (await page.$$('#suggestions .exch.bse')).length >= 1);
       check('search: combobox aria-expanded', (await page.getAttribute('#search', 'aria-expanded')) === 'true');
 
-      await page.click('#suggestions .suggestion');
+      // keyboard navigation: ArrowDown highlights, Enter selects the highlighted option
+      await page.focus('#search');
+      await page.keyboard.press('ArrowDown');
+      check('search: ArrowDown highlights one option', (await page.$$('#suggestions .suggestion[aria-selected="true"]')).length === 1);
+      check('search: aria-activedescendant set', !!(await page.getAttribute('#search', 'aria-activedescendant')));
+      await page.keyboard.press('ArrowDown'); await page.keyboard.press('ArrowUp'); // back to first
+      await page.keyboard.press('Enter');
       await page.waitForSelector('.verdict', { timeout: 8000 }); await page.waitForTimeout(400);
+      check('search: Enter on highlighted option runs analysis', !!(await page.$('.verdict')));
 
       const overall = await page.$eval('.gauge-wrap .g-num', (n) => parseInt(n.textContent, 10));
       check('verdict: score 0–100 integer', Number.isInteger(overall) && overall >= 0 && overall <= 100, 'score=' + overall);
@@ -256,6 +263,12 @@ async function axeAudit(page, label) {
       const headings = await page.$$eval('#home .mv-card h3', (ns) => ns.map((n) => n.textContent));
       check('home: 52-week high & low screens', headings.some((h) => /52-wk high/.test(h)) && headings.some((h) => /52-wk low/.test(h)), headings.join(' | '));
       check('home: most-valuable + most-active-by-volume screens', headings.some((h) => /Most valuable/.test(h)) && headings.filter((h) => /Most active/.test(h)).length === 2);
+      // "Show all" dialog lists the full screen, then closes
+      await page.click('#home .show-all');
+      await page.waitForSelector('#screenDialog[open] .mv-row', { timeout: 5000 });
+      check('home: show-all dialog lists full screen (>6)', (await page.$$('#screenDialog .mv-row')).length > 6);
+      await page.click('#dlgClose'); await page.waitForTimeout(150);
+      check('home: dialog closes', !(await page.$('#screenDialog[open]')));
       await page.click('#home .mv-row');
       await page.waitForSelector('.verdict', { timeout: 8000 });
       check('home: clicking a mover opens analysis', !!(await page.$('.verdict')));

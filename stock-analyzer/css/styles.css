@@ -256,6 +256,16 @@ main { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.3rem 0; }
 .mv-extra { color: var(--faint); font-size: .74rem; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
 .mv-price { font-family: 'JetBrains Mono', monospace; font-size: .84rem; text-align: right; }
 .mv-chg { font-family: 'JetBrains Mono', monospace; font-size: .82rem; font-weight: 600; text-align: right; min-width: 4rem; }
+.mv-card h3 { position: relative; }
+.show-all { position: absolute; right: 0; top: -2px; font: inherit; font-size: .74rem; cursor: pointer; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--brand-ink); padding: .2rem .6rem; border-radius: 999px; }
+.show-all:hover { border-color: var(--brand); }
+/* full-list dialog */
+.modal { border: 1px solid var(--border-2); border-radius: 16px; background: linear-gradient(180deg, var(--card-top), var(--card-bot)); color: var(--text); padding: 0; width: min(560px, 92vw); max-height: 82vh; box-shadow: var(--shadow-lg); }
+.modal::backdrop { background: rgba(0,0,0,.55); backdrop-filter: blur(2px); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card-top); }
+.modal-head h3 { display: flex; align-items: center; gap: .5rem; font-size: 1.02rem; }
+.modal-head .ic { color: var(--brand); }
+.modal-body { padding: .4rem 1.1rem 1.1rem; overflow-y: auto; max-height: calc(82vh - 60px); }
 .home-note { display: flex; gap: .45rem; align-items: flex-start; margin: .2rem .2rem 0; }
 .home-note .ic { flex: none; margin-top: 1px; }
 .home-unavailable { max-width: 720px; }

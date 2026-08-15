@@ -132,7 +132,7 @@ stock-analyzer/
 │   ├── quote.js        server proxy → Yahoo quoteSummary (fundamentals, crumb handshake)
 │   ├── search.js       server proxy → Yahoo symbol search (search by company name)
 │   ├── movers.js       server proxy → Yahoo v7/quote batch (home-page market movers)
-│   ├── financials.js   server proxy → Yahoo statement modules (P&L/BS/CF, annual+qtr)
+│   ├── financials.js   server proxy → Yahoo fundamentals-timeseries (+quoteSummary fallback)
 │   └── peers.js        server proxy → batch quoteSummary (peer comparison)
 └── vercel.json
 ```
@@ -185,7 +185,7 @@ it serves the app locally and mocks the network layer (Yahoo / `/api` + Chart.js
 Playwright, then drives the real app end-to-end and runs an axe-core audit.
 
 ```bash
-cd tests && npm install && npm test   # 70 checks; exits non-zero on failure
+cd tests && npm install && npm test   # 75 checks; exits non-zero on failure
 ```
 
 Covers search, the full analysis render, all tabs, charts, watchlist & theme persistence,

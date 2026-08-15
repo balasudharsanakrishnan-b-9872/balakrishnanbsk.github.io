@@ -129,7 +129,7 @@ stock-analyzer/
 │   ├── quote.js        # proxy → Yahoo quoteSummary (fundamentals; crumb handshake)
 │   ├── search.js       # proxy → Yahoo symbol search (search by company name)
 │   ├── movers.js       # proxy → Yahoo v7/quote batch (home-page market movers)
-│   ├── financials.js   # proxy → Yahoo statement modules (P&L/BS/CF, annual + quarterly)
+│   ├── financials.js   # proxy → Yahoo fundamentals-timeseries (P&L/BS/CF) + quoteSummary fallback
 │   └── peers.js        # proxy → batch quoteSummary fundamentals (peer comparison)
 ├── tests/              # Playwright + axe-core suite (npm test) — NOT deployed
 ├── vercel.json         # Vercel config (clean URLs, function limits, CORS header)
@@ -366,7 +366,7 @@ Preserve these when editing (the test suite checks them):
 ```bash
 cd tests
 npm install     # Playwright + axe-core + Chart.js; downloads Chromium (postinstall)
-npm test        # 70 checks; non-zero exit on failure
+npm test        # 75 checks; non-zero exit on failure
 # or, with a pre-installed browser:
 PW_EXECUTABLE=/path/to/chrome npm test
 ```
