@@ -244,6 +244,12 @@ const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 // flag a component "unavailable" when it couldn't be scored (so the UI shows why)
 const mark = (res, f) => ({ ...res, unavailable: res.score == null });
 
+// Composite fundamentals score for peer ranking — reuses the same scorers as buildScore.
+export function peerScore(f, sector) {
+  const parts = [scoreFundamentals(f).score, scoreGrowth(f).score, scoreHealth(f).score, scoreValuation(f, sector).score].filter((v) => v != null);
+  return parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
+}
+
 export function buildScore({ technical: t, trend: tr, relStrength: rs, risk: rk, fundamentals, ownership, news, sector }) {
   const components = {
     technical: scoreTechnical(t, tr),

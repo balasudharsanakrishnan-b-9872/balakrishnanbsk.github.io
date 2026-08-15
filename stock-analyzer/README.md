@@ -76,6 +76,12 @@ The app is built to be honest about what it can and can't know.
 - **Fundamentals** via `/api/quote` — valuation (P/E, forward P/E, P/B, PEG, P/S,
   EV/EBITDA, dividend yield, market cap), profitability (ROE, ROA, margins), growth
   (revenue/earnings), financial health (D/E, current ratio, cash vs debt, FCF).
+- **Financials** via `/api/financials` — Profit & Loss, Balance Sheet and Cash Flow
+  (annual **and** quarterly, ~4 periods) with a revenue/profit trend chart. Lazy-loaded
+  when the Financials tab is opened.
+- **Peer comparison** via `/api/peers` — same-sector peers compared on growth, ROE,
+  margin, D/E, P/E, EV/EBITDA, dividend yield, with best-in-column highlights and a
+  composite peer **rank**.
 - **Transparent scoring** + decision engine + red-flag engine + confidence & data-quality.
 - **Watchlist** (localStorage) and **interactive charts**.
 - **Optional Google sign-in + sync** — sign in with Google to sync your watchlist &
@@ -125,7 +131,9 @@ stock-analyzer/
 │   ├── history.js      server proxy → Yahoo v8/chart (kills the CORS-relay dependency)
 │   ├── quote.js        server proxy → Yahoo quoteSummary (fundamentals, crumb handshake)
 │   ├── search.js       server proxy → Yahoo symbol search (search by company name)
-│   └── movers.js       server proxy → Yahoo v7/quote batch (home-page market movers)
+│   ├── movers.js       server proxy → Yahoo v7/quote batch (home-page market movers)
+│   ├── financials.js   server proxy → Yahoo statement modules (P&L/BS/CF, annual+qtr)
+│   └── peers.js        server proxy → batch quoteSummary (peer comparison)
 └── vercel.json
 ```
 
@@ -177,7 +185,7 @@ it serves the app locally and mocks the network layer (Yahoo / `/api` + Chart.js
 Playwright, then drives the real app end-to-end and runs an axe-core audit.
 
 ```bash
-cd tests && npm install && npm test   # 65 checks; exits non-zero on failure
+cd tests && npm install && npm test   # 70 checks; exits non-zero on failure
 ```
 
 Covers search, the full analysis render, all tabs, charts, watchlist & theme persistence,

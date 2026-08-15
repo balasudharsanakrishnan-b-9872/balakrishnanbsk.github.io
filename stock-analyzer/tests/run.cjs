@@ -78,6 +78,19 @@ async function makeContext(browser, base, scenario = {}) {
     const quotes = syms.map((y, i) => { const pct = +(((i % 7) - 3) * 1.3 + (i % 3 ? 0.4 : -0.6)).toFixed(2); const price = 100 + i * 7; return { symbol: y.replace(/\.(NS|BO)$/i, ''), yahoo: y, name: y.replace(/\.(NS|BO)$/i, ''), price, change: +(price * pct / 100).toFixed(2), changePct: pct, volume: 1e6 * (1 + (i % 5)), avgVolume: 1e6 * (1 + ((i * 3) % 5)), high52: price * (1 + (i % 4) * 0.05), low52: price * (0.6 + (i % 3) * 0.05), marketCap: 1e11 * (1 + (i % 9)) }; });
     route.fulfill({ json: { available: true, asOf: Date.now(), source: 'mock v7/quote', quotes } });
   });
+  await ctx.route(/\/api\/financials/, (route) => {
+    if (scenario.noFin) return route.fulfill({ json: { available: false, reason: 'mock' } });
+    const inc = (rev, ni) => ({ date: 1700000000, totalRevenue: rev, costOfRevenue: rev * 0.6, grossProfit: rev * 0.4, operatingIncome: rev * 0.25, ebit: rev * 0.24, interestExpense: rev * 0.02, incomeBeforeTax: rev * 0.22, incomeTaxExpense: rev * 0.05, netIncome: ni });
+    const bal = (a) => ({ date: 1700000000, cash: a * 0.1, totalCurrentAssets: a * 0.4, totalAssets: a, totalCurrentLiabilities: a * 0.2, totalLiab: a * 0.5, longTermDebt: a * 0.1, shortLongTermDebt: a * 0.05, totalStockholderEquity: a * 0.5 });
+    const cf = (o) => ({ date: 1700000000, totalCashFromOperatingActivities: o, capitalExpenditures: -o * 0.3, totalCashflowsFromInvestingActivities: -o * 0.4, totalCashFromFinancingActivities: -o * 0.2, changeInCash: o * 0.1 });
+    route.fulfill({ json: { available: true, asOf: Date.now(), source: 'mock', currency: 'INR', annual: { income: [inc(1e11, 1.2e10), inc(9e10, 1e10), inc(8e10, 9e9)], balance: [bal(2e11), bal(1.8e11)], cash: [cf(2e10), cf(1.8e10)] }, quarterly: { income: [inc(2.6e10, 3e9), inc(2.5e10, 2.9e9)], balance: [bal(2e11)], cash: [cf(5e9)] }, earnings: { yearly: [{ date: 2021, revenue: 8e10, earnings: 9e9 }, { date: 2022, revenue: 9e10, earnings: 1e10 }, { date: 2023, revenue: 1e11, earnings: 1.2e10 }], quarterly: [] } } });
+  });
+  await ctx.route(/\/api\/peers/, (route) => {
+    if (scenario.noPeers) return route.fulfill({ json: { available: false, reason: 'mock' } });
+    const mk = (sym, roe, rev, de, pe) => ({ symbol: sym, name: sym + ' Ltd', available: true, valuation: { trailingPE: pe, priceToBook: 3, pegRatio: 1.2, enterpriseToEbitda: 14, dividendYield: 0.006, marketCap: 1e12 }, profitability: { returnOnEquity: roe, returnOnAssets: roe * 0.5, profitMargins: 0.12, operatingMargins: 0.18 }, growth: { revenueGrowth: rev, earningsGrowth: rev * 0.9 }, health: { debtToEquity: de, currentRatio: 1.4, freeCashflow: 5e9, totalCash: 2e10, totalDebt: 1e10 } });
+    const syms = (new URL(route.request().url()).searchParams.get('symbols') || '').split(',').filter(Boolean).map((s) => s.replace(/\.(NS|BO)$/i, ''));
+    route.fulfill({ json: { available: true, asOf: Date.now(), source: 'mock', peers: syms.map((s, i) => mk(s, 0.1 + i * 0.03, 0.08 + i * 0.02, 60 - i * 8, 30 - i * 3)) } });
+  });
   await ctx.route(/corsproxy\.io|allorigins\.win|thingproxy/, (r) => r.abort());
   return ctx;
 }
@@ -86,6 +99,7 @@ async function axeAudit(page, label) {
   await page.evaluate(AXE);
   const res = await page.evaluate(async () => await window.axe.run(document, { resultTypes: ['violations'] }));
   const serious = res.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+  if (serious.length && process.env.AXE_DEBUG) serious.forEach((v) => v.nodes.slice(0, 4).forEach((n) => console.log('   AXE', label, v.id, '|', n.target.join(' '), '|', (n.any[0] && n.any[0].message) || '')));
   check(`a11y: ${label} — no serious/critical axe violations`, serious.length === 0, serious.map((v) => v.id).join(', '));
   return res.violations;
 }
@@ -157,6 +171,18 @@ async function axeAudit(page, label) {
 
       await page.click('#tab-audit'); await page.waitForTimeout(200);
       check('audit: quality + confidence shown', /Data quality/i.test(await page.$eval('#panel-audit', (n) => n.textContent)));
+
+      // financials tab (lazy)
+      await page.click('#tab-financials'); await page.waitForSelector('#panel-financials .fin-table', { timeout: 8000 });
+      check('financials: P&L/BS/CF tables render', (await page.$$('#panel-financials .fin-table')).length >= 3 && /Revenue/.test(await page.$eval('#panel-financials', (n) => n.textContent)));
+      await page.click('#panel-financials .seg-btn[data-fp="quarterly"]'); await page.waitForTimeout(200);
+      check('financials: annual/quarterly toggle works', (await page.getAttribute('#panel-financials .seg-btn[data-fp="quarterly"]', 'aria-pressed')) === 'true');
+
+      // peers tab (lazy)
+      await page.click('#tab-peers'); await page.waitForSelector('#panel-peers .pc-table', { timeout: 8000 });
+      check('peers: comparison table has peer rows', (await page.$$('#panel-peers .pc-table tbody tr')).length >= 2);
+      check('peers: best-in-column highlighted', (await page.$$('#panel-peers .pc-table td.best')).length >= 1);
+      check('peers: analysed stock emphasised + rank shown', !!(await page.$('#panel-peers tr.me')) && /ranks/.test(await page.$eval('#panel-peers', (n) => n.textContent)));
 
       await axeAudit(page, 'dashboard');
 

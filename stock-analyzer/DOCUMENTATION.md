@@ -128,7 +128,9 @@ stock-analyzer/
 │   ├── history.js      # proxy → Yahoo v8/chart
 │   ├── quote.js        # proxy → Yahoo quoteSummary (fundamentals; crumb handshake)
 │   ├── search.js       # proxy → Yahoo symbol search (search by company name)
-│   └── movers.js       # proxy → Yahoo v7/quote batch (home-page market movers)
+│   ├── movers.js       # proxy → Yahoo v7/quote batch (home-page market movers)
+│   ├── financials.js   # proxy → Yahoo statement modules (P&L/BS/CF, annual + quarterly)
+│   └── peers.js        # proxy → batch quoteSummary fundamentals (peer comparison)
 ├── tests/              # Playwright + axe-core suite (npm test) — NOT deployed
 ├── vercel.json         # Vercel config (clean URLs, function limits, CORS header)
 ├── .vercelignore       # keeps tests/ + node_modules out of the deploy
@@ -322,6 +324,8 @@ All three live in `api/`, run on Vercel's Node runtime, only read public endpoin
 | `GET /api/quote` | `symbol` | `{available:true, valuation, profitability, growth, health, …}` or `{available:false, reason}` |
 | `GET /api/search` | `q` | `{ quotes: [...] }` (Yahoo symbol search passthrough) |
 | `GET /api/movers` | `symbols` (comma-separated `.NS`/`.BO` list) | `{available:true, quotes:[{symbol, price, changePct, volume, avgVolume, high52, low52, marketCap}]}` or `{available:false, reason}` — the home page derives gainers/losers/most-active(value&volume)/shockers/most-valuable/near-52w-high/low/sectors/breadth from this |
+| `GET /api/financials` | `symbol` | `{available:true, annual:{income,balance,cash}, quarterly:{…}, earnings:{yearly,quarterly}}` or `{available:false, reason}` — P&L/BS/CF line items per period (lazy, Financials tab) |
+| `GET /api/peers` | `symbols` (≤8, comma-separated) | `{available:true, peers:[{symbol, name, valuation, profitability, growth, health}]}` or `{available:false, reason}` — batch fundamentals for the peer table (lazy, Peers tab) |
 
 `api/quote.js` performs Yahoo's cookie→crumb handshake; Yahoo changes this periodically,
 so it may return `available:false` — that's expected and handled.
@@ -362,7 +366,7 @@ Preserve these when editing (the test suite checks them):
 ```bash
 cd tests
 npm install     # Playwright + axe-core + Chart.js; downloads Chromium (postinstall)
-npm test        # 65 checks; non-zero exit on failure
+npm test        # 70 checks; non-zero exit on failure
 # or, with a pre-installed browser:
 PW_EXECUTABLE=/path/to/chrome npm test
 ```

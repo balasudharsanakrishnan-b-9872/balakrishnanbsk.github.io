@@ -106,4 +106,19 @@ export function scoreGauge(canvasId, breakdown) {
   });
 }
 
+// Revenue vs profit bar chart for the Financials tab.
+export function financialsBar(canvasId, labels, revenue, profit) {
+  make(canvasId, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Revenue', data: revenue, backgroundColor: 'rgba(56,189,248,0.55)' },
+        { label: 'Net profit', data: profit, backgroundColor: css('--brand') },
+      ],
+    },
+    options: baseOpts(),
+  });
+}
+
 export function destroyAll() { Object.values(registry).forEach((c) => c && c.destroy()); }

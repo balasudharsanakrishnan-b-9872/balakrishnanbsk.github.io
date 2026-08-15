@@ -226,4 +226,24 @@ export async function getMovers(yahooSymbols, opts = {}) {
   return { available: false, reason: 'Market movers need the /api/movers server function (available on the Vercel deployment). Not reachable from static hosting, so nothing is shown rather than fabricated.' };
 }
 
+// ---------- financial statements (lazy; Financials tab) ----------
+export async function getFinancials(symbol) {
+  const key = 'fin_' + symbol;
+  const cached = cacheGet(key, CACHE_TTL.quote);
+  if (cached) return { ...cached, cached: true };
+  const local = await tryLocalApi(`/api/financials?symbol=${encodeURIComponent(symbol)}`);
+  if (local && local.ok && local.json) { if (local.json.available) cacheSet(key, local.json); return local.json; }
+  return { available: false, reason: 'Financial statements need the server-side /api/financials function (Vercel). Not reachable from static hosting, so nothing is shown rather than fabricated.' };
+}
+
+// ---------- peer comparison (lazy; Peers tab) ----------
+export async function getPeers(yahooSymbols) {
+  const key = 'peers_' + yahooSymbols.join(',');
+  const cached = cacheGet(key, CACHE_TTL.quote);
+  if (cached) return { ...cached, cached: true };
+  const local = await tryLocalApi(`/api/peers?symbols=${encodeURIComponent(yahooSymbols.join(','))}`);
+  if (local && local.ok && local.json) { if (local.json.available) cacheSet(key, local.json); return local.json; }
+  return { available: false, reason: 'Peer comparison needs the server-side /api/peers function (Vercel). Not reachable from static hosting.' };
+}
+
 export function relayNames() { return CORS_RELAYS.map((r) => hostOf(r('https://x/'))); }

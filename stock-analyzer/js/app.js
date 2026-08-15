@@ -19,6 +19,7 @@ const fmtDateTime = (ms) => (ms ? new Date(ms).toLocaleString('en-IN', { dateSty
 let CURRENT = null; // last analysis result
 let CHART_RANGE = '1Y';
 let loading = false; // true while an analysis is in flight — blocks new requests
+let FIN_PERIOD = 'annual'; // Financials tab: 'annual' | 'quarterly'
 let lastQuotes = new Map(); // symbol -> latest quote (from the home movers fetch) for the live watchlist
 
 // Testing seam: with ?e2e=1 expose render internals so an automated harness can render
@@ -231,6 +232,8 @@ function wireTabs() {
     });
     if (focus) t.focus();
     if (t.dataset.tab === 'charts' && CURRENT) drawCharts();
+    if (t.dataset.tab === 'financials' && CURRENT) ensureFinancials();
+    if (t.dataset.tab === 'peers' && CURRENT) ensurePeers();
   };
   tabs.forEach((t, i) => {
     t.onclick = () => select(t);
@@ -601,6 +604,120 @@ function renderFundamentals(R) {
       </table></div>
     </div>
     <p class="stamp">Source: ${fu.source} · fetched ${fmtDateTime(fu.asOf)}${fu.cached ? ' (cached)' : ''}. Values are as reported by the data vendor; ratios that were not returned show “—”, never a guess.</p>`;
+}
+
+// ================= Financials (lazy) =================
+const crore = (n) => (n == null ? '—' : (n < 0 ? '-' : '') + '₹' + Math.abs(n / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' Cr');
+const finLabel = (sec, annual) => { if (!sec) return '—'; const d = new Date((sec > 1e12 ? sec : sec * 1000)); return annual ? 'FY' + String(d.getFullYear()).slice(2) : d.toLocaleDateString('en-IN', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2); };
+const unavailableCard = (title, reason) => `<div class="card unavailable"><h3>${icon('alert', 'ic')} ${title}</h3><div class="na-banner">${icon('alert', 'ic')} Not available on this deployment</div><p>${reason || 'Not available.'}</p><p class="muted small">Enable by deploying on Vercel (server <code>/api</code> functions). Nothing is fabricated.</p></div>`;
+
+const INCOME_ROWS = [['totalRevenue', 'Revenue'], ['costOfRevenue', 'Cost of revenue'], ['grossProfit', 'Gross profit'], ['operatingIncome', 'Operating income'], ['ebit', 'EBIT'], ['interestExpense', 'Interest'], ['incomeBeforeTax', 'Profit before tax'], ['incomeTaxExpense', 'Tax'], ['netIncome', 'Net profit']];
+const BALANCE_ROWS = [['cash', 'Cash & equivalents'], ['totalCurrentAssets', 'Current assets'], ['totalAssets', 'Total assets'], ['totalCurrentLiabilities', 'Current liabilities'], ['totalLiab', 'Total liabilities'], ['longTermDebt', 'Long-term debt'], ['shortLongTermDebt', 'Short-term debt'], ['totalStockholderEquity', "Shareholders' equity"]];
+const CASH_ROWS = [['totalCashFromOperatingActivities', 'Operating cash flow'], ['capitalExpenditures', 'Capex'], ['totalCashflowsFromInvestingActivities', 'Investing cash flow'], ['totalCashFromFinancingActivities', 'Financing cash flow'], ['changeInCash', 'Net change in cash']];
+
+async function ensureFinancials() {
+  if (!CURRENT) return;
+  if (CURRENT.financials !== undefined) { renderFinancials(CURRENT); return; }
+  if (CURRENT._finLoading) return;
+  CURRENT._finLoading = true;
+  const host = $('#panel-financials'); if (host) host.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading financial statements…</p></div>';
+  CURRENT.financials = await P.getFinancials(CURRENT.data.yahoo || CURRENT.meta.s);
+  CURRENT._finLoading = false;
+  renderFinancials(CURRENT);
+}
+
+function stmtTable(title, ic, periods, defs, annual) {
+  if (!periods || !periods.length) return `<div class="card"><h3>${icon(ic, 'ic')} ${title}</h3><p class="muted small">Not available for this period.</p></div>`;
+  const cols = periods.slice(0, 6);
+  return `<div class="card"><h3>${icon(ic, 'ic')} ${title}</h3><div class="table-scroll"><table class="fin-table">
+    <thead><tr><th>₹ crore</th>${cols.map((p) => `<th>${finLabel(p.date, annual)}</th>`).join('')}</tr></thead>
+    <tbody>${defs.map(([k, label]) => `<tr><td>${label}</td>${cols.map((p) => `<td>${crore(p[k])}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div></div>`;
+}
+
+function renderFinancials(R) {
+  const host = $('#panel-financials'); if (!host) return;
+  const f = R.financials;
+  if (!f || !f.available) { host.innerHTML = unavailableCard('Financial statements', f && f.reason); return; }
+  const annual = FIN_PERIOD === 'annual';
+  const set = f[FIN_PERIOD] || {};
+  host.innerHTML = `
+    <div class="card">
+      <h3>${icon('layers', 'ic')} Financial statements <span class="muted small">${f.source}</span></h3>
+      <div class="seg" role="group" aria-label="Statement period">
+        <button class="seg-btn" data-fp="annual" aria-pressed="${annual}">Annual</button>
+        <button class="seg-btn" data-fp="quarterly" aria-pressed="${!annual}">Quarterly</button>
+      </div>
+      <div class="chart-box" style="height:220px"><canvas id="chartFin" aria-label="Revenue and net profit trend"></canvas></div>
+    </div>
+    ${stmtTable('Profit & Loss', 'activity', set.income, INCOME_ROWS, annual)}
+    ${stmtTable('Balance Sheet', 'scale', set.balance, BALANCE_ROWS, annual)}
+    ${stmtTable('Cash Flow', 'health', set.cash, CASH_ROWS, annual)}
+    <p class="home-note muted small">${icon('info', 'ic')} Figures in ₹ crore, as reported by the data vendor (${FIN_PERIOD}). Yahoo typically provides ~4 recent periods — this is not a substitute for the audited annual report. Missing lines show “—”, never a guess.</p>`;
+  host.querySelectorAll('[data-fp]').forEach((b) => { b.onclick = () => { FIN_PERIOD = b.dataset.fp; renderFinancials(R); }; });
+  // trend chart from the earnings series (fallback to annual income)
+  let series = f.earnings && f.earnings.yearly && f.earnings.yearly.length
+    ? f.earnings.yearly.map((x) => ({ label: x.date, rev: x.revenue, prof: x.earnings }))
+    : (f.annual.income || []).slice().reverse().map((x) => ({ label: finLabel(x.date, true), rev: x.totalRevenue, prof: x.netIncome }));
+  if (series.length && $('#chartFin')) {
+    const toCr = (v) => (v == null ? null : v / 1e7);
+    C.financialsBar('chartFin', series.map((s) => String(s.label)), series.map((s) => toCr(s.rev)), series.map((s) => toCr(s.prof)));
+  }
+}
+
+// ================= Peer comparison (lazy) =================
+async function ensurePeers() {
+  if (!CURRENT) return;
+  if (CURRENT.peers !== undefined) { renderPeers(CURRENT); return; }
+  if (CURRENT._peersLoading) return;
+  CURRENT._peersLoading = true;
+  const host = $('#panel-peers'); if (host) host.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading peer comparison…</p></div>';
+  const sector = CURRENT.meta.sector;
+  const peerStocks = STOCK_UNIVERSE.filter((s) => s.sector === sector && s.s !== CURRENT.meta.s).slice(0, 6);
+  const syms = [...new Set([CURRENT.data.yahoo || toYahoo(CURRENT.meta.s), ...peerStocks.map((s) => toYahoo(s.s))])];
+  CURRENT.peers = syms.length > 1 ? await P.getPeers(syms) : { available: false, reason: 'No same-sector peers available for this stock in the tracked universe.' };
+  CURRENT._peersLoading = false;
+  renderPeers(CURRENT);
+}
+
+function renderPeers(R) {
+  const host = $('#panel-peers'); if (!host) return;
+  const pr = R.peers;
+  if (!pr || !pr.available) { host.innerHTML = unavailableCard('Peer comparison', pr && pr.reason); return; }
+  const sector = R.meta.sector, me = R.meta.s;
+  const gv = (r, path) => path.split('.').reduce((o, k) => (o ? o[k] : null), r);
+  const pctv = (r, path) => { const v = gv(r, path); return v == null ? null : v * 100; };
+  const F = { pct: (v) => (v == null ? '—' : fmtNum(v) + '%'), num: (v) => (v == null ? '—' : fmtNum(v)), x: (v) => (v == null ? '—' : fmtNum(v) + 'x'), int: (v) => (v == null ? '—' : String(v)) };
+  const cols = [
+    { label: 'Rev growth', get: (r) => pctv(r, 'growth.revenueGrowth'), better: 'max', fmt: F.pct },
+    { label: 'Profit growth', get: (r) => pctv(r, 'growth.earningsGrowth'), better: 'max', fmt: F.pct },
+    { label: 'ROE', get: (r) => pctv(r, 'profitability.returnOnEquity'), better: 'max', fmt: F.pct },
+    { label: 'Net margin', get: (r) => pctv(r, 'profitability.profitMargins'), better: 'max', fmt: F.pct },
+    { label: 'D/E', get: (r) => (r.health && r.health.debtToEquity != null ? r.health.debtToEquity / 100 : null), better: 'min', fmt: F.x },
+    { label: 'P/E', get: (r) => gv(r, 'valuation.trailingPE'), better: 'min', fmt: F.num },
+    { label: 'EV/EBITDA', get: (r) => gv(r, 'valuation.enterpriseToEbitda'), better: 'min', fmt: F.num },
+    { label: 'Div yield', get: (r) => pctv(r, 'valuation.dividendYield'), better: 'max', fmt: F.pct },
+    { label: 'Score', get: (r) => r.score, better: 'max', fmt: F.int },
+  ];
+  const rows = pr.peers.map((x) => ({ ...x, score: A.peerScore(x, sector) }));
+  const ranked = [...rows].filter((r) => r.score != null).sort((a, b) => b.score - a.score);
+  const myRank = (() => { const i = ranked.findIndex((r) => r.symbol === me); return i < 0 ? null : i + 1; })();
+  const bests = cols.map((c) => { const vals = rows.map(c.get).filter((v) => v != null); if (!vals.length) return null; return c.better === 'max' ? Math.max(...vals) : Math.min(...vals); });
+  rows.sort((a, b) => (a.symbol === me ? -1 : b.symbol === me ? 1 : (b.score || 0) - (a.score || 0)));
+  const body = rows.map((r) => {
+    const cells = cols.map((c, ci) => { const v = c.get(r); const best = bests[ci] != null && v != null && Math.abs(v - bests[ci]) < 1e-9; return `<td class="${best ? 'best' : ''}">${c.fmt(v)}</td>`; }).join('');
+    return `<tr class="${r.symbol === me ? 'me' : ''}"><td class="pc-name"><b>${r.symbol}</b><span class="muted">${escAttr(r.name || '')}</span></td>${cells}</tr>`;
+  }).join('');
+  host.innerHTML = `
+    <div class="card">
+      <h3>${icon('compare', 'ic')} Peer comparison <span class="muted small">${SECTORS[sector] || ''}</span></h3>
+      ${myRank ? `<p><b>${me}</b> ranks <b class="${myRank <= Math.ceil(ranked.length / 2) ? 'pos' : 'warn'}">${myRank} / ${ranked.length}</b> among these sector peers on a composite of growth, profitability, financial health &amp; valuation.</p>` : ''}
+      <div class="table-scroll"><table class="pc-table">
+        <thead><tr><th>Company</th>${cols.map((c) => `<th>${c.label}</th>`).join('')}</tr></thead>
+        <tbody>${body}</tbody>
+      </table></div>
+      <p class="home-note muted small">${icon('info', 'ic')} Peers are same-sector stocks from the tracked universe (not an exhaustive peer set). Best value per column is highlighted; your stock's row is emphasised. Ratios as reported by the data vendor.</p>
+    </div>`;
 }
 
 function renderNewsOwnership(R) {
