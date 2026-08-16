@@ -22,9 +22,19 @@ PW_EXECUTABLE=/path/to/chrome npm test
 
 `npm test` exits non-zero if any check fails, so it works in CI.
 
-## What it covers (75 checks)
+## What it covers (95 checks)
 
-- **Search** — live dropdown, NSE/BSE dual-listing disambiguation, combobox ARIA
+- **Search** — live dropdown, NSE/BSE dual-listing disambiguation, combobox ARIA,
+  **arrow-key + Enter keyboard nav**, and the **no-match "analyze directly"** path
+- **Home** — 8 mover screens, market breadth, open/closed badge, refresh, sector heatmap,
+  indices, live-price watchlist, **"Show all" dialog**, row → analysis, unavailable state
+- **Financials / Peers** — statement tables + annual/quarterly toggle; peer table with
+  best-in-column + rank; both **unavailable** states
+- **Google sign-in** — hidden when unconfigured; mocked end-to-end (sign-in → merge →
+  push → sign-out); `mergeData` unit
+- **Unit (deterministic core)** — SMA / RSI / CAGR / max-drawdown / beta / Sharpe; the
+  full **decision-band ladder** + critical & low-data-quality **overrides**; red-flag
+  detection; score **re-normalization**; **ticker resolution** (NSE/BSE/index/`&`, altYahoo)
 - **Verdict** — score gauge, rating, ₹ price, stat tiles, data-quality
 - **Overview / Score / Technical / Risk / Fundamentals / Audit** tabs render with real
   computed values; score-table total matches the gauge

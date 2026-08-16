@@ -71,7 +71,7 @@ async function makeContext(browser, base, scenario = {}) {
   await ctx.route(/\/api\/quote/, (route) => scenario.noFund
     ? route.fulfill({ json: { available: false, reason: 'mock unavailable' } })
     : route.fulfill({ json: FUND(new URL(route.request().url()).searchParams.get('symbol') || '') }));
-  await ctx.route(/\/api\/search/, (route) => route.fulfill({ json: SEARCH }));
+  await ctx.route(/\/api\/search/, (route) => { const q = (new URL(route.request().url()).searchParams.get('q') || '').toLowerCase(); route.fulfill({ json: /rel/.test(q) ? SEARCH : { quotes: [] } }); });
   await ctx.route(/\/api\/movers/, (route) => {
     if (scenario.moversFail) return route.fulfill({ json: { available: false, reason: 'mock unavailable' } });
     const syms = (new URL(route.request().url()).searchParams.get('symbols') || '').split(',').filter(Boolean);
@@ -332,6 +332,78 @@ async function axeAudit(page, label) {
       check('gsync(mock): merged data pushed to Drive', uploads >= 1, 'uploads=' + uploads);
       await page.click('#accountBtn'); await page.waitForTimeout(100); await page.click('#amOut'); await page.waitForTimeout(300);
       check('gsync(mock): sign out returns to Sign in', !!(await page.$('#googleSignIn')));
+      await ctx.close();
+    }
+
+    // ===== Scenario I: unit coverage — deterministic maths, scoring, decision, ticker resolution =====
+    {
+      const ctx = await makeContext(browser, base); const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html', { waitUntil: 'domcontentloaded' });
+      const U = await page.evaluate(async () => {
+        const I = await import('/js/indicators.js');
+        const A = await import('/js/analysis.js');
+        const S = await import('/js/stocks.js');
+        const ramp = Array.from({ length: 40 }, (_, i) => i + 1);
+        const bars = []; let p = 100; for (let i = 0; i < 400; i++) { p = p * 1.001 + Math.sin(i / 7); bars.push({ t: i, o: p, h: p * 1.01, l: p * 0.99, c: p, adj: p, v: 1e6 }); }
+        const tech = A.technical(bars), tr = A.trend(bars), rk = A.risk(bars, null);
+        const base = { technical: tech, trend: tr, relStrength: null, risk: rk, ownership: { available: false }, news: { available: false }, sector: 'IT' };
+        const fu = { available: true, valuation: { trailingPE: 20, priceToBook: 3, pegRatio: 1.2, enterpriseToEbitda: 12, dividendYield: 0.01, marketCap: 1e12 }, profitability: { returnOnEquity: 0.2, returnOnAssets: 0.1, profitMargins: 0.15, operatingMargins: 0.2 }, growth: { revenueGrowth: 0.15, earningsGrowth: 0.18 }, health: { debtToEquity: 30, currentRatio: 1.6, freeCashflow: 1e9, totalCash: 2e9, totalDebt: 1e9 } };
+        const sTech = A.buildScore({ ...base, fundamentals: { available: false } });
+        const sFull = A.buildScore({ ...base, fundamentals: fu });
+        const dec = (o, dq, flags = []) => A.decide({ overall: o, dataQuality: dq }, { level: 'Low' }, flags).rating;
+        const rf = A.redFlags({ technical: { rsi14: 78 }, trend: { strength: 'Strong Bearish' }, risk: { maxDrawdown: -65, volatility: 50, beta: 1.6 }, perf: { returns: { '1Y': -45 } } });
+        return {
+          sma: I.sma([1, 2, 3, 4, 5], 5), rsiUp: I.rsi([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 14),
+          cagr: I.cagr([100, 200], 1), mdd: I.maxDrawdown([100, 80, 120]), beta1: I.beta(ramp, ramp),
+          sharpe: I.sharpe(bars.map((b) => b.c)) != null, vol: I.annualVolatility(bars.map((b) => b.c)) > 0,
+          dSB: dec(90, 90), dB: dec(80, 90), dW: dec(65, 90), dA: dec(50, 90), dSA: dec(30, 90), dCrit: dec(90, 90, [{ severity: 'critical', label: 'x', detail: 'y' }]), dLowDQ: dec(90, 40),
+          rfLabels: rf.flags.map((f) => f.label), rfNA: rf.notAssessable.length, peerScore: A.peerScore(fu, 'IT'),
+          covTech: sTech.coveredWeight, dqTech: sTech.dataQuality, covFull: sFull.coveredWeight, dqFull: sFull.dataQuality,
+          toNS: S.toYahoo('RELIANCE'), toBO: S.toYahoo('500325'), toAmp: S.toYahoo('M&M'), toIdx: S.toYahoo('^NSEI'),
+          altNS: S.altYahoo('RELIANCE'), altNum: S.altYahoo('500325'), search0: (S.searchStocks('reli')[0] || {}).s,
+        };
+      });
+      const near = (a, b, t = 0.6) => a != null && Math.abs(a - b) <= t;
+      check('unit: SMA', U.sma === 3);
+      check('unit: RSI(rising)=100', near(U.rsiUp, 100, 0.5), '' + U.rsiUp);
+      check('unit: CAGR double = 100%', near(U.cagr, 100), '' + U.cagr);
+      check('unit: max drawdown', near(U.mdd, -20), '' + U.mdd);
+      check('unit: beta(self)=1', near(U.beta1, 1, 0.05), '' + U.beta1);
+      check('unit: Sharpe + volatility computed', U.sharpe && U.vol);
+      check('unit: decision bands', U.dSB === 'STRONG BUY' && U.dB === 'BUY' && U.dW === 'WATCH / HOLD' && U.dA === 'AVOID' && U.dSA === 'STRONG AVOID', [U.dSB, U.dB, U.dW, U.dA, U.dSA].join(','));
+      check('unit: critical flag caps to AVOID', U.dCrit === 'AVOID', U.dCrit);
+      check('unit: low data-quality caps to WATCH/HOLD', U.dLowDQ === 'WATCH / HOLD', U.dLowDQ);
+      check('unit: red flags detect volatility + overbought', U.rfLabels.some((l) => /volatility/i.test(l)) && U.rfLabels.some((l) => /overbought/i.test(l)), U.rfLabels.join('|'));
+      check('unit: "not assessable" list present', U.rfNA >= 5, '' + U.rfNA);
+      check('unit: peerScore numeric 0–100', typeof U.peerScore === 'number' && U.peerScore >= 0 && U.peerScore <= 100, '' + U.peerScore);
+      check('unit: score re-normalises (fundamentals raise coverage + DQ)', U.covFull > U.covTech && U.dqFull > U.dqTech, `${U.covTech}/${U.dqTech} -> ${U.covFull}/${U.dqFull}`);
+      check('unit: toYahoo NSE/BSE/index/&', U.toNS === 'RELIANCE.NS' && U.toBO === '500325.BO' && U.toAmp === 'M&M.NS' && U.toIdx === '^NSEI', [U.toNS, U.toBO, U.toAmp, U.toIdx].join(','));
+      check('unit: altYahoo fallback (.BO / null)', U.altNS === 'RELIANCE.BO' && U.altNum === null);
+      check('unit: local search finds RELIANCE', U.search0 === 'RELIANCE', U.search0);
+      await ctx.close();
+    }
+
+    // ===== Scenario J: financials + peers "unavailable" states =====
+    {
+      const ctx = await makeContext(browser, base, { noFin: true, noPeers: true }); const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html?s=RELIANCE', { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('.verdict', { timeout: 8000 });
+      await page.click('#tab-financials'); await page.waitForSelector('#panel-financials .unavailable', { timeout: 8000 });
+      check('financials: honest unavailable state', /Not available/i.test(await page.$eval('#panel-financials', (n) => n.textContent)));
+      await page.click('#tab-peers'); await page.waitForSelector('#panel-peers .unavailable', { timeout: 8000 });
+      check('peers: honest unavailable state', /Not available/i.test(await page.$eval('#panel-peers', (n) => n.textContent)));
+      await ctx.close();
+    }
+
+    // ===== Scenario K: search no-match "analyze directly" path =====
+    {
+      const ctx = await makeContext(browser, base); const page = await ctx.newPage(); track(page);
+      await page.goto('/index.html', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(300);
+      await page.fill('#search', 'ZZZQQ'); await page.waitForTimeout(700);
+      check('search: no-match shows a direct-analyze row + note', (await page.$$('#suggestions .suggestion:not(.note)')).length >= 1 && /No name match/i.test(await page.$eval('#suggestions', (n) => n.textContent)));
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.verdict', { timeout: 8000 });
+      check('search: Enter on no-match analyses the typed symbol', /ZZZQQ/.test(await page.$eval('.verdict-id .sym', (n) => n.textContent)));
       await ctx.close();
     }
 
