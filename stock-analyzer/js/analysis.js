@@ -301,15 +301,19 @@ export function decide({ overall, dataQuality }, risk, redFlags) {
   else { rating = 'STRONG AVOID'; emoji = '🔴'; }
 
   const overrides = [];
-  // Critical-risk overrides — never let a high score hide risk (spec §19).
+  // Low data quality: with only partial inputs (e.g. price/technical but no fundamentals)
+  // we cannot justify a directional call in EITHER direction — so show a NEUTRAL verdict
+  // rather than a misleading AVOID/BUY. (Previously this only capped high ratings down,
+  // which made technical-only deployments read "AVOID" for most stocks.)
+  if (dataQuality < 45) {
+    overrides.push('Low data quality — running on technical signals only (no fundamentals). Not enough to judge value, so the verdict is neutral. Deploy the /api backend for a full rating.');
+    rating = 'WATCH / HOLD'; emoji = '🟡';
+  }
+  // Critical-risk overrides — never let a rating hide a serious, evidenced risk (spec §19).
   const critical = redFlags.filter((f) => f.severity === 'critical');
   if (critical.length) {
     if (rank(rating) > rank('AVOID')) { rating = 'AVOID'; emoji = '🔴'; }
     overrides.push('Critical risk flag(s) cap the rating at AVOID.');
-  }
-  if (dataQuality < 45) {
-    overrides.push('Data quality is low — treat this as a preliminary signal only.');
-    if (rank(rating) > rank('WATCH / HOLD')) { rating = 'WATCH / HOLD'; emoji = '🟡'; }
   }
 
   // Horizon suggestion from risk + trend-driven score.

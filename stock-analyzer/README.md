@@ -159,7 +159,7 @@ scored on P/B rather than P/E).
 
 ### Decision bands
 `85–100 STRONG BUY · 75–84 BUY · 60–74 WATCH/HOLD · 45–59 AVOID · 0–44 STRONG AVOID`,
-with overrides: critical red flags cap at AVOID; low data quality caps at WATCH/HOLD.
+with overrides: critical red flags cap at AVOID; low data quality forces a NEUTRAL WATCH/HOLD (both directions — no AVOID/BUY on thin data).
 
 ---
 
@@ -185,7 +185,7 @@ it serves the app locally and mocks the network layer (Yahoo / `/api` + Chart.js
 Playwright, then drives the real app end-to-end and runs an axe-core audit.
 
 ```bash
-cd tests && npm install && npm test   # 95 checks; exits non-zero on failure
+cd tests && npm install && npm test   # 96 checks; exits non-zero on failure
 ```
 
 Covers search, the full analysis render, all tabs, charts, watchlist & theme persistence,

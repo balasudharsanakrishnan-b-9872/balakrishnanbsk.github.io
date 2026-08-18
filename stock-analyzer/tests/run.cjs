@@ -356,7 +356,7 @@ async function axeAudit(page, label) {
           sma: I.sma([1, 2, 3, 4, 5], 5), rsiUp: I.rsi([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], 14),
           cagr: I.cagr([100, 200], 1), mdd: I.maxDrawdown([100, 80, 120]), beta1: I.beta(ramp, ramp),
           sharpe: I.sharpe(bars.map((b) => b.c)) != null, vol: I.annualVolatility(bars.map((b) => b.c)) > 0,
-          dSB: dec(90, 90), dB: dec(80, 90), dW: dec(65, 90), dA: dec(50, 90), dSA: dec(30, 90), dCrit: dec(90, 90, [{ severity: 'critical', label: 'x', detail: 'y' }]), dLowDQ: dec(90, 40),
+          dSB: dec(90, 90), dB: dec(80, 90), dW: dec(65, 90), dA: dec(50, 90), dSA: dec(30, 90), dCrit: dec(90, 90, [{ severity: 'critical', label: 'x', detail: 'y' }]), dLowDQ: dec(90, 40), dLowDQneg: dec(30, 40),
           rfLabels: rf.flags.map((f) => f.label), rfNA: rf.notAssessable.length, peerScore: A.peerScore(fu, 'IT'),
           covTech: sTech.coveredWeight, dqTech: sTech.dataQuality, covFull: sFull.coveredWeight, dqFull: sFull.dataQuality,
           toNS: S.toYahoo('RELIANCE'), toBO: S.toYahoo('500325'), toAmp: S.toYahoo('M&M'), toIdx: S.toYahoo('^NSEI'),
@@ -372,7 +372,8 @@ async function axeAudit(page, label) {
       check('unit: Sharpe + volatility computed', U.sharpe && U.vol);
       check('unit: decision bands', U.dSB === 'STRONG BUY' && U.dB === 'BUY' && U.dW === 'WATCH / HOLD' && U.dA === 'AVOID' && U.dSA === 'STRONG AVOID', [U.dSB, U.dB, U.dW, U.dA, U.dSA].join(','));
       check('unit: critical flag caps to AVOID', U.dCrit === 'AVOID', U.dCrit);
-      check('unit: low data-quality caps to WATCH/HOLD', U.dLowDQ === 'WATCH / HOLD', U.dLowDQ);
+      check('unit: low data-quality → neutral (high score not BUY)', U.dLowDQ === 'WATCH / HOLD', U.dLowDQ);
+      check('unit: low data-quality → neutral (low score NOT Avoid)', U.dLowDQneg === 'WATCH / HOLD', U.dLowDQneg);
       check('unit: red flags detect volatility + overbought', U.rfLabels.some((l) => /volatility/i.test(l)) && U.rfLabels.some((l) => /overbought/i.test(l)), U.rfLabels.join('|'));
       check('unit: "not assessable" list present', U.rfNA >= 5, '' + U.rfNA);
       check('unit: peerScore numeric 0–100', typeof U.peerScore === 'number' && U.peerScore >= 0 && U.peerScore <= 100, '' + U.peerScore);
