@@ -34,7 +34,16 @@ async function getCrumb() {
   return { cookie, crumb };
 }
 
-const num = (o) => (o && typeof o === 'object' && 'raw' in o ? o.raw : o == null ? null : o);
+// Robust extractor: Yahoo values are {raw,fmt} objects, plain numbers, or (for missing
+// metrics) empty objects / strings. Return a finite number or null — never a raw object
+// (which would surface as NaN in the UI).
+const num = (o) => {
+  if (o == null) return null;
+  if (typeof o === 'number') return isFinite(o) ? o : null;
+  if (typeof o === 'object') return typeof o.raw === 'number' && isFinite(o.raw) ? o.raw : null;
+  const n = Number(o);
+  return isFinite(n) ? n : null;
+};
 
 module.exports = async (req, res) => {
   const symbol = String((req.query && req.query.symbol) || '').trim();

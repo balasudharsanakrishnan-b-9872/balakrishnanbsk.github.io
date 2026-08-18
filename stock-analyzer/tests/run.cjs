@@ -50,7 +50,7 @@ function chartJSON(ticker, opts = {}) {
   for (let i = days - 1; i >= 0; i--) { ts.push(now - i * day); p = Math.max(1, p * (1 + drift) + Math.sin(i / 7) * 0.5); const c = +p.toFixed(2); open.push(+(c * 0.995).toFixed(2)); high.push(+(c * 1.01).toFixed(2)); low.push(+(c * 0.99).toFixed(2)); close.push(c); adj.push(c); vol.push(1000000 + ((days - i) % 40) * 10000); }
   return { chart: { result: [{ meta: { currency, exchangeName: exch, regularMarketPrice: close.at(-1), chartPreviousClose: close.at(-2), fiftyTwoWeekHigh: Math.max(...high), fiftyTwoWeekLow: Math.min(...low), regularMarketTime: now }, timestamp: ts, indicators: { quote: [{ open, high, low, close, volume: vol }], adjclose: [{ adjclose: adj }] } }], error: null } };
 }
-const FUND = (ticker) => ({ available: true, ticker, asOf: Date.now(), source: 'Yahoo quoteSummary (mock)', profile: { sector: 'Energy', industry: 'Oil & Gas' }, valuation: { trailingPE: 22.4, forwardPE: 19.1, priceToBook: 2.1, pegRatio: 1.1, priceToSales: 1.8, enterpriseToEbitda: 12.3, dividendYield: 0.006, marketCap: 1.7e13 }, profitability: { returnOnEquity: 0.142, returnOnAssets: 0.061, profitMargins: 0.093, operatingMargins: 0.131, grossMargins: 0.352 }, growth: { revenueGrowth: 0.121, earningsGrowth: 0.104, earningsQuarterlyGrowth: 0.09 }, health: { debtToEquity: 52, currentRatio: 1.21, totalCash: 2e11, totalDebt: 3e11, freeCashflow: 5e10, operatingCashflow: 9e10 } });
+const FUND = (ticker) => ({ available: true, ticker, asOf: Date.now(), source: 'Yahoo quoteSummary (mock)', profile: { sector: 'Energy', industry: 'Oil & Gas' }, valuation: { trailingPE: 22.4, forwardPE: 19.1, priceToBook: 2.1, pegRatio: 1.1, priceToSales: {}, enterpriseToEbitda: 12.3, dividendYield: 0.006, marketCap: 1.7e13 }, profitability: { returnOnEquity: 0.142, returnOnAssets: 0.061, profitMargins: 0.093, operatingMargins: 0.131, grossMargins: 0.352 }, growth: { revenueGrowth: 0.121, earningsGrowth: 0.104, earningsQuarterlyGrowth: 0.09 }, health: { debtToEquity: 52, currentRatio: 1.21, totalCash: 2e11, totalDebt: 3e11, freeCashflow: 5e10, operatingCashflow: 9e10 } });
 const SEARCH = { quotes: [
   { symbol: 'RELIANCE.NS', shortname: 'Reliance Industries', longname: 'Reliance Industries Limited', quoteType: 'EQUITY', exchange: 'NSI' },
   { symbol: 'RELIANCE.BO', shortname: 'Reliance Industries', longname: 'Reliance Industries Limited', quoteType: 'EQUITY', exchange: 'BSE' },
@@ -175,6 +175,8 @@ async function axeAudit(page, label) {
       const fTxt = await page.$eval('#panel-fundamentals', (n) => n.textContent);
       check('fundamentals: P/E populated', /Trailing P\/E/.test(fTxt) && /22\.4/.test(fTxt));
       check('fundamentals: ROE populated', /ROE/.test(fTxt) && /14\.2/.test(fTxt));
+      // Regression: a bad upstream value (priceToSales:{} in the mock) must render as '—', never NaN.
+      check('fundamentals: no NaN rendered', !/NaN/.test(fTxt) && /—/.test(fTxt));
 
       await page.click('#tab-audit'); await page.waitForTimeout(200);
       check('audit: quality + confidence shown', /Data quality/i.test(await page.$eval('#panel-audit', (n) => n.textContent)));

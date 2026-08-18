@@ -11,9 +11,11 @@ import * as G from './gsync.js';
 
 const $ = (sel) => document.querySelector(sel);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
-const fmtNum = (x, d = 2) => (x == null ? '—' : Number(x).toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d }));
-const fmtPct = (x) => (x == null ? '—' : `${x > 0 ? '+' : ''}${fmtNum(x)}%`);
-const fmtPrice = (x) => (x == null ? '—' : '₹' + fmtNum(x));
+// Formatters treat null AND non-finite (NaN/Infinity, or a stray object) as "—", so a bad
+// upstream value can never render as "NaN".
+const fmtNum = (x, d = 2) => { const n = Number(x); return x == null || !isFinite(n) ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: d, minimumFractionDigits: d }); };
+const fmtPct = (x) => { const n = Number(x); return x == null || !isFinite(n) ? '—' : `${n > 0 ? '+' : ''}${fmtNum(n)}%`; };
+const fmtPrice = (x) => { const n = Number(x); return x == null || !isFinite(n) ? '—' : '₹' + fmtNum(n); };
 const fmtDateTime = (ms) => (ms ? new Date(ms).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 
 let CURRENT = null; // last analysis result
@@ -591,8 +593,8 @@ function renderFundamentals(R) {
       </div>`;
     return;
   }
-  const pc = (d) => (d == null ? '—' : fmtNum(d * 100) + '%');
-  const cr = (n) => (n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 2 }));
+  const pc = (d) => { const n = Number(d); return d == null || !isFinite(n) ? '—' : fmtNum(n * 100) + '%'; };
+  const cr = crFmt;
   const v = fu.valuation || {}, p = fu.profitability || {}, g = fu.growth || {}, h = fu.health || {};
   host.innerHTML = `
     <div class="grid2">
@@ -633,7 +635,7 @@ function renderFundamentals(R) {
 }
 
 // ================= Financials (lazy) =================
-const crore = (n) => (n == null ? '—' : (n < 0 ? '-' : '') + '₹' + Math.abs(n / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' Cr');
+const crore = (n) => { const v = Number(n); return n == null || !isFinite(v) ? '—' : (v < 0 ? '-' : '') + '₹' + Math.abs(v / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' Cr'; };
 const finLabel = (sec, annual) => { if (!sec) return '—'; const d = new Date((sec > 1e12 ? sec : sec * 1000)); return annual ? 'FY' + String(d.getFullYear()).slice(2) : d.toLocaleDateString('en-IN', { month: 'short' }) + " '" + String(d.getFullYear()).slice(2); };
 const unavailableCard = (title, reason) => `<div class="card unavailable"><h3>${icon('alert', 'ic')} ${title}</h3><div class="na-banner">${icon('alert', 'ic')} Not available on this deployment</div><p>${reason || 'Not available.'}</p><p class="muted small">Enable by deploying on Vercel (server <code>/api</code> functions). Nothing is fabricated.</p></div>`;
 
@@ -824,7 +826,7 @@ function marketStatus() {
     return { open };
   } catch (_) { return { open: false }; }
 }
-const volFmt = (n) => (n == null ? '—' : Number(n).toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 1 }));
+const volFmt = (n) => { const v = Number(n); return n == null || !isFinite(v) ? '—' : v.toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 1 }); };
 
 async function loadIndices() {
   const out = [];
@@ -870,7 +872,7 @@ function computeScreens(quotes) {
   };
 }
 
-const crFmt = (n) => (n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 2 }));
+const crFmt = (n) => { const v = Number(n); return n == null || !isFinite(v) ? '—' : '₹' + v.toLocaleString('en-IN', { notation: 'compact', maximumFractionDigits: 2 }); };
 const escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
 function moverRow(r, extra) {
