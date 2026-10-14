@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maker and Checker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #f2f3f5;
+      --surface: #ffffff;
+      --topbar: #2b3036;
+      --text: #222;
+      --muted: #555;
+      --border: #e2e4e8;
+      --row-alt: #f6f7f9;
+      --accent: #1a88e0;
+      --accent-soft: #e8f3fc;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Roboto', Arial, sans-serif; font-size: 13px; color: var(--text); background: var(--bg); }
+    button { font: inherit; cursor: pointer; }
+    a { color: inherit; text-decoration: none; }
+
+    /* Top bar */
+    .topbar { height: 50px; background: var(--topbar); color: #fff; display: flex; align-items: center; padding: 0 14px; gap: 18px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+    .brand .logo { width: 24px; height: 24px; background: #fff; border-radius: 4px; display: grid; place-items: center; color: var(--topbar); font-size: 14px; }
+    .grid-icon { display: grid; grid-template-columns: repeat(3, 4px); gap: 3px; }
+    .grid-icon span { width: 4px; height: 4px; background: #fff; border-radius: 1px; }
+    .nav { display: flex; gap: 20px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+    .nav a { white-space: nowrap; opacity: .92; }
+    .nav a:hover { opacity: 1; text-decoration: underline; }
+    .icons { display: flex; align-items: center; gap: 16px; }
+    .icon-btn { position: relative; width: 22px; height: 22px; display: grid; place-items: center; }
+    .icon-btn svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 1.6; }
+    .badge { position: absolute; top: -7px; right: -8px; background: #e0262b; border-radius: 9px; font-size: 10px; padding: 0 4px; line-height: 15px; }
+    .icon-btn.active { background: var(--accent); width: 32px; height: 50px; }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; position: relative; }
+    .avatar::after { content: ""; position: absolute; right: -2px; bottom: -2px; width: 8px; height: 8px; background: #3fbf5a; border-radius: 50%; }
+
+    /* Quick links */
+    .quickbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 7px 40px; display: flex; gap: 6px; overflow-x: auto; }
+    .quickbar a { border: 1px solid var(--border); padding: 3px 7px; font-size: 12px; white-space: nowrap; border-radius: 2px; }
+    .quickbar a:hover { background: var(--row-alt); }
+
+    /* Layout */
+    .layout { display: flex; margin: 20px 10px 0; min-height: calc(100vh - 110px); background: var(--surface); border: 1px solid var(--border); }
+    .sidebar { width: 230px; flex-shrink: 0; border-right: 1px solid var(--border); padding: 8px 0 0; }
+    .search { margin: 0 10px 8px; position: relative; }
+    .search input { width: 100%; border: 1px solid var(--border); padding: 7px 8px 7px 28px; font: inherit; border-radius: 2px; }
+    .search svg { position: absolute; left: 8px; top: 8px; width: 14px; height: 14px; stroke: #888; fill: none; stroke-width: 2; }
+    .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 11px 15px; border-top: 1px solid var(--border); cursor: pointer; }
+    .menu-item:hover { background: var(--row-alt); }
+    .menu-item .chev { color: #999; }
+    .submenu a { display: block; padding: 10px 15px; border-top: 1px solid var(--border); }
+    .submenu a:hover { background: var(--row-alt); }
+    .submenu a.active { background: var(--accent); color: #fff; }
+
+    /* Content */
+    .content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .page-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .page-head h1 { font-size: 16px; font-weight: 500; color: #333; }
+    .pager { display: flex; gap: 8px; }
+    .btn { border: 1px solid var(--border); background: var(--surface); padding: 5px 10px; border-radius: 2px; color: var(--text); }
+    .btn:hover { background: var(--row-alt); }
+    .tabs { display: flex; gap: 6px; padding: 0 10px; border-bottom: 1px solid var(--border); margin-top: 8px; }
+    .tab { border: none; background: none; padding: 10px 12px; color: var(--muted); border-bottom: 2px solid transparent; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 15px 10px 10px; }
+    .btn-new { display: inline-flex; align-items: center; gap: 6px; }
+    .btn-new .plus { width: 16px; height: 16px; border-radius: 50%; background: #666; color: #fff; display: grid; place-items: center; font-size: 13px; line-height: 1; }
+    .history { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; color: var(--text); }
+    .history svg { width: 16px; height: 16px; stroke: #666; fill: none; stroke-width: 1.6; }
+
+    .table-wrap { padding: 0 10px; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 900px; }
+    th { text-align: left; font-weight: 400; font-size: 12px; color: #444; text-transform: uppercase; padding: 12px 6px; background: #f7f8fa; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    th + th, td + td { border-left: 1px solid var(--border); }
+    th.c, td.c { width: 55px; text-align: center; }
+    td { padding: 13px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr:nth-child(even) { background: var(--row-alt); }
+    td.desc { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+    .row-icon { border: none; background: none; }
+    .row-icon svg { width: 16px; height: 16px; stroke: #888; fill: none; stroke-width: 1.5; }
+    .row-icon:hover svg { stroke: var(--accent); }
+
+    .switch { position: relative; display: inline-block; width: 32px; height: 16px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: #c4c7cc; border-radius: 16px; transition: .2s; cursor: pointer; }
+    .slider::before { content: ""; position: absolute; width: 10px; height: 10px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+    .switch input:checked + .slider { background: var(--accent); }
+    .switch input:checked + .slider::before { transform: translateX(16px); }
+
+    .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+    /* Modal */
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; align-items: center; justify-content: center; padding: 16px; }
+    .modal-bg.open { display: flex; }
+    .modal { background: var(--surface); width: 460px; max-width: 100%; border-radius: 3px; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
+    .modal h2 { font-size: 15px; font-weight: 500; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .modal form { padding: 16px 18px; display: grid; gap: 12px; }
+    .modal label { display: grid; gap: 4px; color: var(--muted); }
+    .modal input, .modal select, .modal textarea { font: inherit; padding: 7px 8px; border: 1px solid var(--border); border-radius: 2px; color: var(--text); }
+    .modal .actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: #1476c4; }
+
+    .help-tab { position: fixed; right: 0; top: 168px; width: 22px; height: 36px; background: var(--accent); color: #fff; border-radius: 4px 0 0 4px; display: grid; place-items: center; font-weight: 700; }
+
+    @media (max-width: 760px) {
+      .nav, .quickbar { display: none; }
+      .layout { flex-direction: column; margin: 10px 0 0; }
+      .sidebar { width: 100%; border-right: none; }
+      .submenu, .menu-item:not(.open) { display: none; }
+      .page-head { padding: 12px 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="grid-icon" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="brand"><span class="logo">&#9711;</span>IT Helpdesk</div>
+    <nav class="nav">
+      <a href="#">Home</a><a href="#">Dashboard</a><a href="#">Requests</a><a href="#">Problems</a><a href="#">Changes</a>
+      <a href="#">Projects</a><a href="#">TestMachin...</a><a href="#">Releases</a><a href="#">Solutions</a>
+      <a href="#">Maintenance</a><a href="#">Assets</a><a href="#">&bull;&bull;&bull;</a>
+    </nav>
+    <div class="icons">
+      <span class="icon-btn"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span>
+      <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span>
+      <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></span>
+      <span class="icon-btn"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg><span class="badge">13</span></span>
+      <span class="icon-btn"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><span class="badge">2</span></span>
+      <span class="icon-btn active"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></span>
+      <span class="icon-btn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/></svg></span>
+      <span class="avatar" aria-label="Profile"></span>
+    </div>
+  </header>
+
+  <div class="quickbar">
+    <a href="#">Endpoint Central &#9662;</a><a href="#">Advanced Analytics</a><a href="#">ADManager Plus &#9662;</a>
+    <a href="#">Quick Link &#9662;</a><a href="#">PAM360</a><a href="#">KMP</a><a href="#">Site24x7</a>
+    <a href="#">OpManager</a><a href="#">Eventlog Analyzer</a><a href="#">AD Self Service</a><a href="#">Getting Started</a>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="menuSearch" type="text" placeholder="Search..." />
+      </div>
+      <div id="menu">
+        <div class="menu-item">Service Desk Configuration <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Users &amp; Permission <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Mail Server Settings <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Customization <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Templates &amp; Forms <span class="chev">&#8250;</span></div>
+        <div class="menu-item open">Automation <span class="chev">&#8964;</span></div>
+        <div class="submenu">
+          <a href="#">Business Rules</a><a href="#">Service Level Agreements</a><a href="#">Request Life Cycle</a>
+          <a href="#">Custom Triggers</a><a href="#">Request Timer Actions</a><a href="#">Notification Rules</a>
+          <a href="#">Closure Rules</a><a href="#">Technician Auto Assign</a><a href="#" class="active">Maker and Checker</a>
+          <a href="#">Workflows</a><a href="#">Custom Schedules</a>
+        </div>
+        <div class="menu-item">Discovery <span class="chev">&#8250;</span></div>
+        <div class="menu-item">User Survey <span class="chev">&#8250;</span></div>
+        <div class="menu-item">General Settings <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Apps &amp; Add-ons <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Developer Space <span class="chev">&#8250;</span></div>
+        <div class="menu-item">Zia <span class="chev">&#8250;</span></div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="page-head">
+        <h1>Automation - Maker and Checker</h1>
+        <div class="pager">
+          <button class="btn">&#8249; Previous</button>
+          <button class="btn">Next &#8250;</button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" id="tabs">
+        <button class="tab" data-tab="Asset">Asset</button>
+        <button class="tab" data-tab="Software">Software</button>
+        <button class="tab" data-tab="CI">CI</button>
+        <button class="tab active" data-tab="Test Machine">Test Machine</button>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn btn-new" id="newRuleBtn"><span class="plus">+</span>New Rule</button>
+        <button class="history"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>View History</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th class="c"></th><th class="c"></th><th class="c"></th><th>Name</th><th>Description</th><th>Action</th><th>Last Updated By</th><th>Last Updated On</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+        <div class="empty" id="empty" hidden>No rules configured for this module.</div>
+      </div>
+    </main>
+  </div>
+
+  <a class="help-tab" href="#" aria-label="Help">?</a>
+
+  <div class="modal-bg" id="modal">
+    <div class="modal" role="dialog" aria-labelledby="modalTitle">
+      <h2 id="modalTitle">New Rule</h2>
+      <form id="ruleForm">
+        <label>Name<input name="name" required /></label>
+        <label>Description<textarea name="description" rows="3"></textarea></label>
+        <label>Action
+          <select name="action"><option>Add</option><option>Edit</option><option>Delete</option></select>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn" id="cancelBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const desc = 'Ensures that all purchase requests are reviewed and approved before processing.';
+    const data = {
+      'Asset': [], 'Software': [], 'CI': [],
+      'Test Machine': [
+        { name: 'Purchase Request Approval Rule', description: desc, action: 'Add', by: 'David', on: '06/02/2024 02:19 PM', enabled: true },
+        { name: 'Critical CI Change Approval', description: desc, action: 'Edit', by: 'David', on: '06/02/2024 02:19 PM', enabled: true }
+      ]
+    };
+    let current = 'Test Machine';
+    let editing = null;
+
+    const pencil = '<svg viewBox="0 0 24 24"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>';
+    const trash = '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg>';
+    const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+    function fmt(d) {
+      const p = n => String(n).padStart(2, '0');
+      const h = d.getHours() % 12 || 12;
+      return `${p(d.getMonth() + 1)}/${p(d.getDate())}/${d.getFullYear()} ${p(h)}:${p(d.getMinutes())} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+    }
+
+    function render() {
+      const rows = data[current];
+      document.getElementById('empty').hidden = rows.length > 0;
+      document.getElementById('rows').innerHTML = rows.map((r, i) => `
+        <tr>
+          <td class="c"><button class="row-icon" data-edit="${i}" aria-label="Edit">${pencil}</button></td>
+          <td class="c"><button class="row-icon" data-del="${i}" aria-label="Delete">${trash}</button></td>
+          <td class="c"><label class="switch"><input type="checkbox" data-toggle="${i}" ${r.enabled ? 'checked' : ''}><span class="slider"></span></label></td>
+          <td>${esc(r.name)}</td>
+          <td class="desc" title="${esc(r.description)}">${esc(r.description)}</td>
+          <td>${esc(r.action)}</td>
+          <td>${esc(r.by)}</td>
+          <td>${esc(r.on)}</td>
+        </tr>`).join('');
+    }
+
+    document.getElementById('tabs').addEventListener('click', e => {
+      const t = e.target.closest('.tab');
+      if (!t) return;
+      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === t));
+      current = t.dataset.tab;
+      render();
+    });
+
+    const modal = document.getElementById('modal');
+    const form = document.getElementById('ruleForm');
+    function openModal(i) {
+      editing = i;
+      form.reset();
+      document.getElementById('modalTitle').textContent = i == null ? 'New Rule' : 'Edit Rule';
+      if (i != null) {
+        const r = data[current][i];
+        form.name.value = r.name; form.description.value = r.description; form.action.value = r.action;
+      }
+      modal.classList.add('open');
+      form.name.focus();
+    }
+    const closeModal = () => modal.classList.remove('open');
+
+    document.getElementById('newRuleBtn').onclick = () => openModal(null);
+    document.getElementById('cancelBtn').onclick = closeModal;
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const rule = { name: form.name.value.trim(), description: form.description.value.trim(), action: form.action.value, by: 'David', on: fmt(new Date()) };
+      if (editing == null) data[current].push({ ...rule, enabled: true });
+      else Object.assign(data[current][editing], rule);
+      closeModal();
+      render();
+    });
+
+    document.getElementById('rows').addEventListener('click', e => {
+      const ed = e.target.closest('[data-edit]');
+      const del = e.target.closest('[data-del]');
+      if (ed) openModal(+ed.dataset.edit);
+      if (del && confirm('Delete this rule?')) { data[current].splice(+del.dataset.del, 1); render(); }
+    });
+    document.getElementById('rows').addEventListener('change', e => {
+      if (e.target.dataset.toggle != null) data[current][+e.target.dataset.toggle].enabled = e.target.checked;
+    });
+
+    document.getElementById('menuSearch').addEventListener('input', e => {
+      const q = e.target.value.toLowerCase();
+      document.querySelectorAll('#menu .menu-item, #menu .submenu a').forEach(el => {
+        el.style.display = !q || el.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>
